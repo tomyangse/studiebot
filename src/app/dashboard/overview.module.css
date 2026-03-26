@@ -1,0 +1,202 @@
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Welcome section */
+.welcome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.welcome h1 {
+  font-size: var(--text-2xl);
+}
+
+.welcome p {
+  color: var(--color-text-secondary);
+  margin-top: var(--space-1);
+}
+
+/* Stats cards */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.statCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.statHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.statIcon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-lg);
+}
+
+.statIcon.blue { background: var(--color-primary-light); }
+.statIcon.green { background: var(--color-success-light); }
+.statIcon.purple { background: var(--color-info-light); }
+.statIcon.gold { background: var(--color-accent-light); }
+
+.statBadge {
+  font-size: var(--text-xs);
+}
+
+.statValue {
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-bold);
+}
+
+.statLabel {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Subject progress */
+.subjectProgressSection h2 {
+  margin-bottom: var(--space-4);
+  font-size: var(--text-xl);
+}
+
+.subjectProgressList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.subjectProgressItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+}
+
+.subjectProgressIcon {
+  font-size: var(--text-2xl);
+  width: 40px;
+  text-align: center;
+}
+
+.subjectProgressInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.subjectProgressName {
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-2);
+}
+
+.subjectProgressMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.subjectProgressBar {
+  width: 200px;
+}
+
+.subjectProgressPercent {
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* Today tasks */
+.todaySection h2 {
+  margin-bottom: var(--space-4);
+  font-size: var(--text-xl);
+}
+
+.todayList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.todayItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  transition: background var(--transition-fast);
+  cursor: pointer;
+}
+
+.todayItem:hover {
+  background: var(--color-surface);
+}
+
+.todayCheckbox {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: white;
+}
+
+.todayCheckbox.done {
+  background: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.todayItemText {
+  font-size: var(--text-sm);
+  flex: 1;
+}
+
+.todayItemText.done {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+
+.todayItemBadge {
+  font-size: var(--text-xs);
+}
+
+/* Two column layout for bottom */
+.bottomGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
+
+@media (max-width: 768px) {
+  .bottomGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .subjectProgressBar {
+    width: 120px;
+  }
+}

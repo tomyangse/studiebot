@@ -1,0 +1,354 @@
+"use client";
+
+import { useState } from "react";
+import { HISTORIA_1B_CURRICULUM } from "@/lib/curriculum-data";
+import styles from "./quiz.module.css";
+
+const DIFFICULTY_OPTIONS = [
+  { value: "mixed", emoji: "🎯", label: "Blandad", desc: "E + C + A" },
+  { value: "E", emoji: "📗", label: "E-nivå", desc: "Grundläggande" },
+  { value: "C", emoji: "📙", label: "C-nivå", desc: "Fördjupad" },
+  { value: "A", emoji: "📕", label: "A-nivå", desc: "Avancerad" },
+];
+
+const AVAILABLE_TOPICS = HISTORIA_1B_CURRICULUM.centralContent.map((cc) => ({
+  id: cc.id,
+  label: cc.title,
+}));
+
+export default function QuizPage() {
+  const [phase, setPhase] = useState("setup"); // setup | loading | active | results
+  const [selectedTopics, setSelectedTopics] = useState([]);
+  const [difficulty, setDifficulty] = useState("mixed");
+  const [quiz, setQuiz] = useState(null);
+  const [currentQ, setCurrentQ] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [showExplanation, setShowExplanation] = useState(false);
+  const [answers, setAnswers] = useState([]);
+
+  const toggleTopic = (id) => {
+    setSelectedTopics((prev) =>
+      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
+    );
+  };
+
+  const selectAll = () => {
+    if (selectedTopics.length === AVAILABLE_TOPICS.length) {
+      setSelectedTopics([]);
+    } else {
+      setSelectedTopics(AVAILABLE_TOPICS.map((t) => t.id));
+    }
+  };
+
+  const handleGenerate = async () => {
+    setPhase("loading");
+    try {
+      const topicLabels = AVAILABLE_TOPICS.filter((t) =>
+        selectedTopics.includes(t.id)
+      ).map((t) => t.label);
+
+      const res = await fetch("/api/quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topics: topicLabels,
+          questionCount: 5,
+          difficulty,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setQuiz(data.quiz);
+        setCurrentQ(0);
+        setAnswers([]);
+        setPhase("active");
+      } else {
+        alert(data.error || "Kunde inte generera quiz.");
+        setPhase("setup");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Ett fel uppstod. Försök igen.");
+      setPhase("setup");
+    }
+  };
+
+  const handleAnswer = (optionIndex) => {
+    if (selectedAnswer !== null) return; // Already answered
+    setSelectedAnswer(optionIndex);
+    setShowExplanation(true);
+
+    const isCorrect = optionIndex === quiz.questions[currentQ].correctIndex;
+    setAnswers((prev) => [...prev, { questionIndex: currentQ, optionIndex, isCorrect }]);
+  };
+
+  const handleNext = () => {
+    if (currentQ < quiz.questions.length - 1) {
+      setCurrentQ((q) => q + 1);
+      setSelectedAnswer(null);
+      setShowExplanation(false);
+    } else {
+      setPhase("results");
+    }
+  };
+
+  const handleRestart = () => {
+    setPhase("setup");
+    setQuiz(null);
+    setCurrentQ(0);
+    setSelectedAnswer(null);
+    setShowExplanation(false);
+    setAnswers([]);
+  };
+
+  const getOptionClass = (index) => {
+    if (selectedAnswer === null) return "";
+    const correct = quiz.questions[currentQ].correctIndex;
+    if (index === correct) return styles.correct;
+    if (index === selectedAnswer && index !== correct) return styles.wrong;
+    return "";
+  };
+
+  const correctCount = answers.filter((a) => a.isCorrect).length;
+  const scorePercent = quiz ? Math.round((correctCount / quiz.questions.length) * 100) : 0;
+
+  const getResultEmoji = () => {
+    if (scorePercent >= 80) return "🌟";
+    if (scorePercent >= 60) return "👍";
+    if (scorePercent >= 40) return "💪";
+    return "📚";
+  };
+
+  const getResultMessage = () => {
+    if (scorePercent >= 80) return "Utmärkt! Du behärskar materialet!";
+    if (scorePercent >= 60) return "Bra jobbat! Fortsätt öva.";
+    if (scorePercent >= 40) return "Du är på rätt väg. Repetera de svåra delarna.";
+    return "Kämpa på! Repetera materialet och försök igen.";
+  };
+
+  return (
+    <div className={styles.quizPage}>
+      <h1>❓ Quiz</h1>
+
+      {/* === Setup Phase === */}
+      {phase === "setup" && (
+        <div className={styles.quizSetup}>
+          <p style={{ color: "var(--color-text-secondary)", marginBottom: "var(--space-6)" }}>
+            Välj ämnen och svårighetsgrad för att generera ett quiz med AI.
+          </p>
+
+          <h3 style={{ marginBottom: "var(--space-3)" }}>Välj ämnen</h3>
+          <div className={styles.topicChips}>
+            <button
+              className={`${styles.topicChip} ${
+                selectedTopics.length === AVAILABLE_TOPICS.length ? styles.selected : ""
+              }`}
+              onClick={selectAll}
+            >
+              Alla
+            </button>
+            {AVAILABLE_TOPICS.map((topic) => (
+              <button
+                key={topic.id}
+                className={`${styles.topicChip} ${
+                  selectedTopics.includes(topic.id) ? styles.selected : ""
+                }`}
+                onClick={() => toggleTopic(topic.id)}
+              >
+                {topic.label}
+              </button>
+            ))}
+          </div>
+
+          <h3 style={{ marginBottom: "var(--space-3)" }}>Svårighetsgrad</h3>
+          <div className={styles.difficultyGrid}>
+            {DIFFICULTY_OPTIONS.map((opt) => (
+              <div
+                key={opt.value}
+                className={`card ${styles.difficultyCard} ${
+                  difficulty === opt.value ? styles.selected : ""
+                }`}
+                onClick={() => setDifficulty(opt.value)}
+              >
+                <div className={styles.difficultyEmoji}>{opt.emoji}</div>
+                <div className={styles.difficultyLabel}>{opt.label}</div>
+                <div className={styles.difficultyDesc}>{opt.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            className="btn btn-primary btn-lg"
+            disabled={selectedTopics.length === 0}
+            onClick={handleGenerate}
+          >
+            🧠 Generera quiz ({selectedTopics.length} ämne{selectedTopics.length !== 1 ? "n" : ""})
+          </button>
+        </div>
+      )}
+
+      {/* === Loading Phase === */}
+      {phase === "loading" && (
+        <div className={styles.quizLoading}>
+          <div className={styles.quizLoadingIcon}>🧠</div>
+          <h3>Genererar quiz...</h3>
+          <p style={{ color: "var(--color-text-secondary)" }}>
+            AI skapar frågor baserade på din ämnesplan. Några sekunder...
+          </p>
+        </div>
+      )}
+
+      {/* === Active Quiz Phase === */}
+      {phase === "active" && quiz && (
+        <div className={styles.quizActive}>
+          <div className={styles.quizProgress}>
+            <span className={styles.quizProgressText}>
+              Fråga {currentQ + 1} / {quiz.questions.length}
+            </span>
+            <div className={`progress-bar ${styles.quizProgressBar}`}>
+              <div
+                className="progress-bar-fill"
+                style={{
+                  width: `${((currentQ + (selectedAnswer !== null ? 1 : 0)) / quiz.questions.length) * 100}%`,
+                }}
+              />
+            </div>
+            <span
+              className={`badge ${
+                quiz.questions[currentQ].gradeLevel === "A"
+                  ? "badge-success"
+                  : quiz.questions[currentQ].gradeLevel === "C"
+                  ? "badge-warning"
+                  : "badge-danger"
+              } ${styles.quizGradeBadge}`}
+            >
+              {quiz.questions[currentQ].gradeLevel}
+            </span>
+          </div>
+
+          <div className={`card ${styles.questionCard}`}>
+            <p className={styles.questionText}>
+              {quiz.questions[currentQ].question}
+            </p>
+
+            <div className={styles.optionsList}>
+              {quiz.questions[currentQ].options.map((option, i) => (
+                <button
+                  key={i}
+                  className={`${styles.optionBtn} ${getOptionClass(i)}`}
+                  onClick={() => handleAnswer(i)}
+                  disabled={selectedAnswer !== null}
+                >
+                  <span className={styles.optionLetter}>
+                    {String.fromCharCode(65 + i)}
+                  </span>
+                  <span>{option.replace(/^[A-D]\.\s*/, "")}</span>
+                </button>
+              ))}
+            </div>
+
+            {showExplanation && (
+              <div className={styles.explanation}>
+                <span className={styles.explanationLabel}>
+                  {selectedAnswer === quiz.questions[currentQ].correctIndex
+                    ? "✅ Rätt!"
+                    : "❌ Fel"}
+                </span>
+                {quiz.questions[currentQ].explanation}
+              </div>
+            )}
+          </div>
+
+          {selectedAnswer !== null && (
+            <button className="btn btn-primary" onClick={handleNext}>
+              {currentQ < quiz.questions.length - 1
+                ? "Nästa fråga →"
+                : "Se resultat →"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* === Results Phase === */}
+      {phase === "results" && quiz && (
+        <div className={styles.quizResults}>
+          <div className={styles.resultsHeader}>
+            <div className={styles.resultsEmoji}>{getResultEmoji()}</div>
+            <div className={styles.resultsScore}>
+              <span className="text-gradient">{scorePercent}%</span>
+            </div>
+            <p className={styles.resultsLabel}>{getResultMessage()}</p>
+          </div>
+
+          <div className={styles.resultsStats}>
+            <div className={`card ${styles.resultsStat}`}>
+              <div
+                className={styles.resultsStatValue}
+                style={{ color: "var(--color-success)" }}
+              >
+                {correctCount}
+              </div>
+              <div className={styles.resultsStatLabel}>Rätt</div>
+            </div>
+            <div className={`card ${styles.resultsStat}`}>
+              <div
+                className={styles.resultsStatValue}
+                style={{ color: "var(--color-danger)" }}
+              >
+                {quiz.questions.length - correctCount}
+              </div>
+              <div className={styles.resultsStatLabel}>Fel</div>
+            </div>
+            <div className={`card ${styles.resultsStat}`}>
+              <div className={styles.resultsStatValue}>
+                {quiz.questions.length}
+              </div>
+              <div className={styles.resultsStatLabel}>Totalt</div>
+            </div>
+          </div>
+
+          {/* Review wrong answers */}
+          {answers.filter((a) => !a.isCorrect).length > 0 && (
+            <>
+              <h3 style={{ marginBottom: "var(--space-3)" }}>
+                Att repetera
+              </h3>
+              <div className={styles.reviewList}>
+                {answers
+                  .filter((a) => !a.isCorrect)
+                  .map((a, i) => {
+                    const q = quiz.questions[a.questionIndex];
+                    return (
+                      <div key={i} className={`card ${styles.reviewItem}`}>
+                        <span className={styles.reviewIcon}>📌</span>
+                        <div className={styles.reviewQuestion}>
+                          <strong>{q.question}</strong>
+                          <span>
+                            Rätt svar:{" "}
+                            {q.options[q.correctIndex]?.replace(
+                              /^[A-D]\.\s*/,
+                              ""
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
+          )}
+
+          <div className={styles.resultsActions}>
+            <button className="btn btn-primary" onClick={handleGenerate}>
+              🔄 Nytt quiz
+            </button>
+            <button className="btn btn-secondary" onClick={handleRestart}>
+              ⚙️ Ändra inställningar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
