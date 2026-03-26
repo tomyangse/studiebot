@@ -1,12 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import styles from "./login.module.css";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className={styles.authPage}><div className={styles.authContainer}><p>Laddar...</p></div></div>}>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isRegister, setIsRegister] = useState(false);
