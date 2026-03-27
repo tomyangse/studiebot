@@ -37,7 +37,7 @@ export default function DashboardOverview() {
   const displaySubject = {
     name: activeSubject.levelName,
     icon: activeSubject.icon,
-    progress: 35, // Mock progress
+    progress: 0, // TODO: Replace with real user progress from database
     points: `${activeSubject.points}p`,
     status: "active"
   };
