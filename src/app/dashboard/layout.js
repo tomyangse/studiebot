@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SubjectProvider, useSubject } from "@/lib/subject-context";
+import { SUBJECTS } from "@/lib/curriculum-data";
 import styles from "./dashboard.module.css";
 
 const NAV_ITEMS = [
@@ -23,8 +24,13 @@ export default function DashboardLayout({ children }) {
 }
 
 function DashboardLayoutInner({ children }) {
-  const { activeSubject, subjects, switchSubject } = useSubject();
+  const { activeSubject, subjects, switchSubject, addSubject, removeSubject } = useSubject();
   const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addStep, setAddStep] = useState("subject"); // subject | level | loading
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [selectedLevel, setSelectedLevel] = useState(null);
+  const [addError, setAddError] = useState("");
   const pathname = usePathname();
   const [chatOpen, setChatOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -96,23 +102,53 @@ function DashboardLayoutInner({ children }) {
           {subjectDropdownOpen && (
             <div className={styles.subjectDropdown}>
               {subjects.map((s) => (
-                <button
+                <div
                   key={`${s.code}:${s.levelName}`}
                   className={`${styles.subjectDropdownItem} ${
                     activeSubject.code === s.code && activeSubject.levelName === s.levelName
                       ? styles.activeSubject
                       : ""
                   }`}
-                  onClick={() => {
-                    switchSubject(s.code, s.levelName);
-                    setSubjectDropdownOpen(false);
-                  }}
                 >
-                  <span>{s.icon}</span>
-                  <span>{s.levelName}</span>
-                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{s.points}p</span>
-                </button>
+                  <button
+                    className={styles.subjectDropdownBtn}
+                    onClick={() => {
+                      switchSubject(s.code, s.levelName);
+                      setSubjectDropdownOpen(false);
+                    }}
+                  >
+                    <span>{s.icon}</span>
+                    <span>{s.levelName}</span>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{s.points}p</span>
+                  </button>
+                  {s.isCustom && (
+                    <button
+                      className={styles.subjectRemoveBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSubject(s.code, s.levelName);
+                      }}
+                      title="Ta bort"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               ))}
+              <button
+                className={styles.subjectAddBtn}
+                onClick={() => {
+                  setSubjectDropdownOpen(false);
+                  setAddStep("subject");
+                  setSelectedSubject(null);
+                  setSelectedLevel(null);
+                  setAddError("");
+                  setAddModalOpen(true);
+                }}
+              >
+                <span>+</span>
+                <span>Lägg till ämne</span>
+              </button>
             </div>
           )}
         </div>
@@ -293,6 +329,119 @@ function DashboardLayoutInner({ children }) {
         >
           💬
         </button>
+      )}
+
+      {/* Add Subject Modal */}
+      {addModalOpen && (
+        <div className={styles.modalOverlay} onClick={() => setAddModalOpen(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>
+                {addStep === "subject" && "Välj ämne"}
+                {addStep === "level" && `${selectedSubject?.name} — välj kurs`}
+                {addStep === "loading" && "Skapar kursplan..."}
+              </h3>
+              <button
+                className="btn btn-ghost btn-icon btn-sm"
+                onClick={() => setAddModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              {addStep === "subject" && (
+                <div className={styles.addSubjectGrid}>
+                  {SUBJECTS
+                    .filter((s) => !subjects.some((existing) =>
+                      existing.code === s.code && s.levels.every((l) =>
+                        subjects.some((e) => e.levelName === l.name)
+                      )
+                    ))
+                    .map((s) => (
+                    <button
+                      key={s.code}
+                      className={styles.addSubjectCard}
+                      onClick={() => {
+                        setSelectedSubject(s);
+                        setAddStep("level");
+                      }}
+                    >
+                      <span className={styles.addSubjectIcon}>{s.icon}</span>
+                      <span className={styles.addSubjectName}>{s.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {addStep === "level" && selectedSubject && (
+                <div className={styles.addLevelList}>
+                  {selectedSubject.levels
+                    .filter((l) => !subjects.some((e) => e.levelName === l.name))
+                    .map((l) => (
+                    <button
+                      key={l.name}
+                      className={styles.addLevelItem}
+                      onClick={async () => {
+                        setSelectedLevel(l);
+                        setAddStep("loading");
+                        setAddError("");
+                        try {
+                          const res = await fetch("/api/curriculum", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              subjectName: selectedSubject.name,
+                              levelName: l.name,
+                            }),
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            addSubject(data.curriculum);
+                            setAddModalOpen(false);
+                          } else {
+                            setAddError(data.error || "Kunde inte generera kursplan.");
+                            setAddStep("level");
+                          }
+                        } catch (err) {
+                          setAddError("Nätverksfel. Försök igen.");
+                          setAddStep("level");
+                        }
+                      }}
+                    >
+                      <span>{selectedSubject.icon}</span>
+                      <span>{l.name}</span>
+                      <span style={{ color: "var(--color-text-muted)", fontSize: "var(--text-xs)" }}>
+                        {l.points}p
+                      </span>
+                    </button>
+                  ))}
+                  <button
+                    className={styles.addBackBtn}
+                    onClick={() => setAddStep("subject")}
+                  >
+                    ← Tillbaka
+                  </button>
+                  {addError && (
+                    <p style={{ color: "var(--color-danger)", fontSize: "var(--text-sm)", marginTop: "var(--space-3)" }}>
+                      {addError}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {addStep === "loading" && (
+                <div className={styles.addLoading}>
+                  <div className={styles.addLoadingIcon}>🤖</div>
+                  <p>AI genererar kursplan för <strong>{selectedLevel?.name}</strong>...</p>
+                  <p style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>
+                    Centralt innehåll och betygskriterier skapas automatiskt.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

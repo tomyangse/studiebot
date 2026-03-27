@@ -125,6 +125,206 @@
   font-weight: var(--weight-semibold);
 }
 
+.subjectDropdownBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: none;
+  border: none;
+  color: inherit;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  padding: 0;
+}
+
+.subjectRemoveBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  opacity: 0;
+}
+
+.subjectDropdownItem:hover .subjectRemoveBtn {
+  opacity: 1;
+}
+
+.subjectRemoveBtn:hover {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+.subjectAddBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.subjectAddBtn:hover {
+  background: var(--color-primary-light);
+}
+
+/* Modal */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: fade-in 0.15s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  width: 90%;
+  max-width: 520px;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slide-up 0.2s ease;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modalHeader h3 {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.modalBody {
+  padding: var(--space-5);
+  overflow-y: auto;
+}
+
+.addSubjectGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.addSubjectCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.addSubjectCard:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+  transform: translateY(-2px);
+}
+
+.addSubjectIcon {
+  font-size: var(--text-2xl);
+}
+
+.addSubjectName {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  text-align: center;
+}
+
+.addLevelList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.addLevelItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.addLevelItem:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.addLevelItem span:nth-child(2) {
+  flex: 1;
+}
+
+.addBackBtn {
+  display: block;
+  margin-top: var(--space-3);
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  padding: var(--space-2) 0;
+}
+
+.addBackBtn:hover {
+  color: var(--color-text);
+}
+
+.addLoading {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+}
+
+.addLoadingIcon {
+  font-size: 48px;
+  margin-bottom: var(--space-4);
+  animation: pulse-soft 1.5s infinite;
+}
+
 .sidebarNav {
   flex: 1;
   padding: var(--space-4) var(--space-3);

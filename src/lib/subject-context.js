@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useCallback } from "react";
 import {
   CURRICULUM_MAP,
   AVAILABLE_SUBJECTS,
@@ -11,15 +11,66 @@ const SubjectContext = createContext(null);
 
 export function SubjectProvider({ children }) {
   const [activeSubjectKey, setActiveSubjectKey] = useState("HIS:Historia 1b");
+  // Custom curricula added by the user at runtime
+  const [customCurricula, setCustomCurricula] = useState({});
+  // Extra subject entries added by the user
+  const [customSubjects, setCustomSubjects] = useState([]);
 
-  const curriculum = CURRICULUM_MAP[activeSubjectKey] || HISTORIA_1B_CURRICULUM;
-  const activeSubject = AVAILABLE_SUBJECTS.find(
+  const allCurricula = { ...CURRICULUM_MAP, ...customCurricula };
+  const allSubjects = [...AVAILABLE_SUBJECTS, ...customSubjects];
+
+  const curriculum = allCurricula[activeSubjectKey] || HISTORIA_1B_CURRICULUM;
+  const activeSubject = allSubjects.find(
     (s) => `${s.code}:${s.levelName}` === activeSubjectKey
   ) || AVAILABLE_SUBJECTS[0];
 
-  const switchSubject = (code, levelName) => {
+  const switchSubject = useCallback((code, levelName) => {
     setActiveSubjectKey(`${code}:${levelName}`);
-  };
+  }, []);
+
+  const addSubject = useCallback((curriculumData) => {
+    const key = `${curriculumData.subjectCode}:${curriculumData.levelName}`;
+
+    // Add to custom curricula
+    setCustomCurricula((prev) => ({ ...prev, [key]: curriculumData }));
+
+    // Add to custom subjects list (avoid duplicates)
+    setCustomSubjects((prev) => {
+      if (prev.some((s) => `${s.code}:${s.levelName}` === key)) return prev;
+      return [
+        ...prev,
+        {
+          code: curriculumData.subjectCode,
+          levelName: curriculumData.levelName,
+          icon: curriculumData.icon,
+          points: curriculumData.points,
+          isCustom: true,
+        },
+      ];
+    });
+
+    // Auto-switch to the new subject
+    setActiveSubjectKey(key);
+  }, []);
+
+  const removeSubject = useCallback(
+    (code, levelName) => {
+      const key = `${code}:${levelName}`;
+      setCustomCurricula((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      setCustomSubjects((prev) =>
+        prev.filter((s) => `${s.code}:${s.levelName}` !== key)
+      );
+      // If we removed the active subject, switch back to default
+      if (activeSubjectKey === key) {
+        setActiveSubjectKey("HIS:Historia 1b");
+      }
+    },
+    [activeSubjectKey]
+  );
 
   return (
     <SubjectContext.Provider
@@ -27,8 +78,10 @@ export function SubjectProvider({ children }) {
         activeSubject,
         activeSubjectKey,
         curriculum,
-        subjects: AVAILABLE_SUBJECTS,
+        subjects: allSubjects,
         switchSubject,
+        addSubject,
+        removeSubject,
       }}
     >
       {children}
