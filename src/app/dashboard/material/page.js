@@ -16,6 +16,9 @@ export default function MaterialPage() {
   const [dragging, setDragging] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
+  const [lastDocId, setLastDocId] = useState(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractResult, setExtractResult] = useState(null);
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
@@ -112,6 +115,7 @@ export default function MaterialPage() {
 
         // Ändra status till done
         await supabase.from('documents').update({ status: 'done' }).eq('id', dbDoc.id);
+        setLastDocId(dbDoc.id);
         
         // Konvertera fil till base64 för kontext (snabblösning för MVP cache i minne)
         const reader = new FileReader();
@@ -339,7 +343,73 @@ export default function MaterialPage() {
             ))}
           </div>
 
-          {/* Actions */}
+          {/* Extract Knowledge Points */}
+          {!extractResult && (
+            <div className="card" style={{ padding: 'var(--space-6)', marginTop: 'var(--space-6)', background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1))', borderColor: 'var(--color-primary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+                <span style={{ fontSize: '2.5rem' }}>🧠</span>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ marginBottom: 'var(--space-1)' }}>Extrahera alla kunskapspunkter</h3>
+                  <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
+                    AI analyserar hela dokumentet och skapar flashcards för varje enskild faktapunkt. Inga luckor – 100% täckning.
+                  </p>
+                </div>
+                <button
+                  className="btn btn-primary btn-lg"
+                  disabled={extracting || !lastDocId}
+                  onClick={async () => {
+                    setExtracting(true);
+                    try {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      const res = await fetch('/api/extract-cards', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ documentId: lastDocId, accessToken: session.access_token }),
+                      });
+                      const result = await res.json();
+                      if (result.success) {
+                        setExtractResult(result);
+                      } else {
+                        alert(result.error || 'Extraktion misslyckades');
+                      }
+                    } catch (e) {
+                      console.error(e);
+                      alert('Kunde inte extrahera kunskapspunkter.');
+                    } finally {
+                      setExtracting(false);
+                    }
+                  }}
+                >
+                  {extracting ? '⚙️ Extraherar...' : '🧠 Extrahera nu'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Extraction Result */}
+          {extractResult && (
+            <div className="card" style={{ padding: 'var(--space-6)', marginTop: 'var(--space-6)', background: 'linear-gradient(135deg, rgba(34,197,94,0.1), rgba(16,185,129,0.1))', borderColor: 'var(--color-success)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+                <span style={{ fontSize: '2.5rem' }}>✅</span>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ marginBottom: 'var(--space-1)', color: 'var(--color-success)' }}>
+                    {extractResult.totalCards} kunskapspunkter extraherade!
+                  </h3>
+                  <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
+                    Alla kort från "{extractResult.deckTitle}" har sparats i din kartlek. Gå till Flashcards för att börja studera.
+                  </p>
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => router.push('/dashboard/flashcards')}
+                >
+                  🃏 Börja studera
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Other Actions */}
           <div
             style={{
               display: "flex",
@@ -349,22 +419,18 @@ export default function MaterialPage() {
             }}
           >
             <button
-              className="btn btn-primary"
+              className="btn btn-secondary"
               onClick={() => router.push("/dashboard/quiz")}
             >
               ❓ Skapa quiz från detta material
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => router.push("/dashboard/flashcards")}
-            >
-              🃏 Generera flashcards
             </button>
             <button
               className="btn btn-ghost"
               onClick={() => {
                 setFile(null);
                 setAnalysisResult(null);
+                setExtractResult(null);
+                setLastDocId(null);
               }}
             >
               📄 Ladda upp nytt material

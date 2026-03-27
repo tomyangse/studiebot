@@ -1,8 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useSubject } from "@/lib/subject-context";
-import { useMaterial } from "@/lib/material-context";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import styles from "./flashcards.module.css";
 
@@ -14,270 +12,396 @@ const TYPE_LABELS = {
   concept: "Begrepp",
 };
 
+// ─── SM-2 Simplified ───
+function computeNextReview(prevEase, prevInterval, rating) {
+  let ease = prevEase;
+  let interval = prevInterval;
+
+  if (rating === "hard") {
+    ease = Math.max(1.3, ease - 0.2);
+    interval = 1;
+  } else if (rating === "ok") {
+    interval = Math.max(1, Math.round(interval * 1.0));
+  } else {
+    // easy
+    ease = ease + 0.1;
+    interval = Math.max(1, Math.round(interval * ease));
+  }
+
+  const nextReviewAt = new Date();
+  nextReviewAt.setDate(nextReviewAt.getDate() + interval);
+
+  return { ease, interval, nextReviewAt };
+}
+
 export default function FlashcardsPage() {
-  const { curriculum } = useSubject();
-  const { materials } = useMaterial();
-  const AVAILABLE_TOPICS = curriculum.centralContent.map((cc) => ({
-    id: cc.id,
-    label: cc.title,
-  }));
-  const [phase, setPhase] = useState("setup"); // setup | loading | study | results
-  const [sourceType, setSourceType] = useState("curriculum"); // 'curriculum' | 'material'
-  const [selectedTopics, setSelectedTopics] = useState([]);
-  const [selectedMaterialId, setSelectedMaterialId] = useState(null);
-  const [cardCount, setCardCount] = useState(10);
-  const [deck, setDeck] = useState(null);
+  // ─── State ───
+  const [phase, setPhase] = useState("loading"); // loading | deckSelect | study | results
+  const [decks, setDecks] = useState([]);
+  const [selectedDeckId, setSelectedDeckId] = useState(null);
+
+  // Study session
+  const [studyCards, setStudyCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
-  const [ratings, setRatings] = useState([]); // { cardId, rating: hard|ok|easy }
+  const [sessionRatings, setSessionRatings] = useState([]); // { cardId, rating }
 
-  const toggleTopic = (id) => {
-    setSelectedTopics((prev) =>
-      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
-    );
-  };
+  // Deck stats (fetched per-deck)
+  const [deckStats, setDeckStats] = useState({}); // deckId -> { total, mastered, due, new }
 
-  const selectAll = () => {
-    if (selectedTopics.length === AVAILABLE_TOPICS.length) {
-      setSelectedTopics([]);
-    } else {
-      setSelectedTopics(AVAILABLE_TOPICS.map((t) => t.id));
+  // ─── Load decks on mount ───
+  useEffect(() => {
+    loadDecks();
+  }, []);
+
+  const loadDecks = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const { data, error } = await supabase
+      .from("flashcard_decks")
+      .select("id, title, total_cards, status, document_id, created_at")
+      .eq("user_id", session.user.id)
+      .eq("status", "ready")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error loading decks:", error);
     }
+
+    const fetchedDecks = data || [];
+    setDecks(fetchedDecks);
+
+    // Load stats for each deck
+    const stats = {};
+    for (const deck of fetchedDecks) {
+      stats[deck.id] = await loadDeckStats(deck.id, session.user.id);
+    }
+    setDeckStats(stats);
+    setPhase("deckSelect");
   };
 
-  const handleGenerate = async () => {
+  const loadDeckStats = async (deckId, userId) => {
+    // Get all cards in this deck
+    const { data: cards } = await supabase
+      .from("flashcards")
+      .select("id")
+      .eq("deck_id", deckId);
+
+    const totalCards = cards?.length || 0;
+    if (totalCards === 0) return { total: 0, mastered: 0, due: 0, newCards: 0 };
+
+    const cardIds = cards.map((c) => c.id);
+
+    // Get latest review for each card
+    const { data: reviews } = await supabase
+      .from("flashcard_reviews")
+      .select("card_id, rating, interval_days, next_review_at, reviewed_at")
+      .eq("user_id", userId)
+      .in("card_id", cardIds)
+      .order("reviewed_at", { ascending: false });
+
+    // Get latest review per card
+    const latestByCard = {};
+    if (reviews) {
+      for (const r of reviews) {
+        if (!latestByCard[r.card_id]) {
+          latestByCard[r.card_id] = r;
+        }
+      }
+    }
+
+    const now = new Date();
+    let mastered = 0;
+    let due = 0;
+    let reviewedCardIds = new Set();
+
+    for (const [cardId, review] of Object.entries(latestByCard)) {
+      reviewedCardIds.add(cardId);
+      if (review.interval_days >= 7 && review.rating === "easy") {
+        mastered++;
+      } else if (new Date(review.next_review_at) <= now) {
+        due++;
+      }
+    }
+
+    const newCards = totalCards - reviewedCardIds.size;
+
+    return { total: totalCards, mastered, due, newCards };
+  };
+
+  // ─── Start study session ───
+  const startStudy = async (deckId) => {
+    setSelectedDeckId(deckId);
     setPhase("loading");
-    try {
-      let payload = {
-        cardCount
-      };
 
-      if (sourceType === "curriculum") {
-        const topicLabels = AVAILABLE_TOPICS.filter((t) =>
-          selectedTopics.includes(t.id)
-        ).map((t) => t.label);
-        
-        if (topicLabels.length === 0) {
-          alert("Välj minst ett ämne från kursplanen.");
-          setPhase("setup");
-          return;
-        }
-        payload.topics = topicLabels;
-      } else {
-        if (!selectedMaterialId) {
-          alert("Välj ett material.");
-          setPhase("setup");
-          return;
-        }
-        const mat = materials.find(m => m.id === selectedMaterialId);
-        
-        let base64Data = mat.base64Data;
-        if (!base64Data && mat.storagePath) {
-          const { data, error } = await supabase.storage.from("study_materials").download(mat.storagePath);
-          if (error) {
-            alert("Kunde inte hämta filen från molnet.");
-            setPhase("setup");
-            return;
-          }
-          const reader = new FileReader();
-          base64Data = await new Promise((resolve) => {
-            reader.onloadend = () => resolve(reader.result.split(',')[1]);
-            reader.readAsDataURL(data);
-          });
-        }
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return;
 
-        payload.sourceMaterial = {
-          filename: mat.filename,
-          mimeType: mat.mimeType,
-          base64Data,
-        };
-      }
+    // Get all cards in deck
+    const { data: allCards } = await supabase
+      .from("flashcards")
+      .select("*")
+      .eq("deck_id", deckId)
+      .order("sort_order", { ascending: true });
 
-      const res = await fetch("/api/flashcards", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setDeck(data.deck);
-        setCurrentIndex(0);
-        setFlipped(false);
-        setRatings([]);
-        setPhase("study");
-      } else {
-        alert(data.error || "Kunde inte generera flashcards.");
-        setPhase("setup");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Ett fel uppstod. Försök igen.");
-      setPhase("setup");
+    if (!allCards || allCards.length === 0) {
+      alert("Denna kartlek har inga kort.");
+      setPhase("deckSelect");
+      return;
     }
+
+    const cardIds = allCards.map((c) => c.id);
+
+    // Get latest reviews
+    const { data: reviews } = await supabase
+      .from("flashcard_reviews")
+      .select("card_id, rating, ease_factor, interval_days, next_review_at, reviewed_at")
+      .eq("user_id", session.user.id)
+      .in("card_id", cardIds)
+      .order("reviewed_at", { ascending: false });
+
+    const latestByCard = {};
+    if (reviews) {
+      for (const r of reviews) {
+        if (!latestByCard[r.card_id]) {
+          latestByCard[r.card_id] = r;
+        }
+      }
+    }
+
+    const now = new Date();
+
+    // Categorize
+    const newCards = [];
+    const dueCards = [];
+
+    for (const card of allCards) {
+      const review = latestByCard[card.id];
+      if (!review) {
+        // Never seen
+        newCards.push(card);
+      } else if (review.interval_days >= 7 && review.rating === "easy") {
+        // Mastered — skip for now
+        continue;
+      } else if (new Date(review.next_review_at) <= now) {
+        // Due for review
+        dueCards.push({ ...card, _lastReview: review });
+      }
+      // else: not yet due, skip
+    }
+
+    // Build session: up to 5 due cards + up to 10 new cards
+    const sessionCards = [
+      ...dueCards.slice(0, 5),
+      ...newCards.slice(0, 10),
+    ];
+
+    if (sessionCards.length === 0) {
+      alert("🎉 Inga kort att studera just nu! Alla kort är antingen behärskade eller inte redo för repetition ännu.");
+      setPhase("deckSelect");
+      return;
+    }
+
+    setStudyCards(sessionCards);
+    setCurrentIndex(0);
+    setFlipped(false);
+    setSessionRatings([]);
+    setPhase("study");
   };
 
-  const handleFlip = () => {
-    setFlipped(!flipped);
-  };
+  // ─── Handle card rating ───
+  const handleRate = async (rating) => {
+    const card = studyCards[currentIndex];
+    const lastReview = card._lastReview;
 
-  const handleRate = (rating) => {
-    const card = deck.cards[currentIndex];
-    setRatings((prev) => [...prev, { cardId: card.id, rating }]);
+    const prevEase = lastReview?.ease_factor || 2.5;
+    const prevInterval = lastReview?.interval_days || 0;
 
-    // Move to next card
-    if (currentIndex < deck.cards.length - 1) {
+    const { ease, interval, nextReviewAt } = computeNextReview(
+      prevEase,
+      prevInterval,
+      rating
+    );
+
+    // Save to Supabase
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session) {
+      await supabase.from("flashcard_reviews").insert({
+        user_id: session.user.id,
+        card_id: card.id,
+        rating,
+        ease_factor: ease,
+        interval_days: interval,
+        next_review_at: nextReviewAt.toISOString(),
+      });
+    }
+
+    setSessionRatings((prev) => [...prev, { cardId: card.id, rating }]);
+
+    // Move to next card or results
+    if (currentIndex < studyCards.length - 1) {
       setCurrentIndex((i) => i + 1);
       setFlipped(false);
     } else {
+      // Refresh deck stats before showing results
+      if (session) {
+        const updatedStats = await loadDeckStats(selectedDeckId, session.user.id);
+        setDeckStats((prev) => ({ ...prev, [selectedDeckId]: updatedStats }));
+      }
       setPhase("results");
     }
   };
 
-  const handleRestart = () => {
-    setPhase("setup");
-    setDeck(null);
-    setCurrentIndex(0);
-    setFlipped(false);
-    setRatings([]);
-  };
-
-  const handleStudyAgain = () => {
-    // Only re-study cards rated "hard"
-    if (!deck) return;
-    const hardIds = ratings
-      .filter((r) => r.rating === "hard")
-      .map((r) => r.cardId);
-
-    if (hardIds.length === 0) {
-      // All cards mastered, regenerate
-      handleGenerate();
-      return;
-    }
-
-    const hardCards = deck.cards.filter((c) => hardIds.includes(c.id));
-    setDeck({ ...deck, cards: hardCards });
-    setCurrentIndex(0);
-    setFlipped(false);
-    setRatings([]);
-    setPhase("study");
-  };
-
-  const easyCount = ratings.filter((r) => r.rating === "easy").length;
-  const okCount = ratings.filter((r) => r.rating === "ok").length;
-  const hardCount = ratings.filter((r) => r.rating === "hard").length;
-
-  const currentCard = deck?.cards?.[currentIndex];
+  // ─── Computed values ───
+  const currentCard = studyCards[currentIndex];
+  const easyCount = sessionRatings.filter((r) => r.rating === "easy").length;
+  const okCount = sessionRatings.filter((r) => r.rating === "ok").length;
+  const hardCount = sessionRatings.filter((r) => r.rating === "hard").length;
+  const selectedDeckStats = deckStats[selectedDeckId];
 
   return (
     <div className={styles.flashcardsPage}>
       <h1>🃏 Flashcards</h1>
 
-      {/* === Setup === */}
-      {phase === "setup" && (
-        <div className={styles.fcSetup}>
-          <p style={{ color: "var(--color-text-secondary)", marginBottom: "var(--space-6)" }}>
-            Välj källa för att generera flashcards med AI.
-          </p>
-
-          <h3 style={{ marginBottom: "var(--space-3)" }}>Datakälla</h3>
-          <div className={styles.sourceSelector} style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
-            <button
-              className={`btn ${sourceType === "curriculum" ? "btn-primary" : "btn-secondary"}`}
-              onClick={() => setSourceType("curriculum")}
-            >
-              📖 Kursplanen
-            </button>
-            <button
-              className={`btn ${sourceType === "material" ? "btn-primary" : "btn-secondary"}`}
-              onClick={() => setSourceType("material")}
-            >
-              📄 Mitt material
-            </button>
-          </div>
-
-          <h3 style={{ marginBottom: "var(--space-3)" }}>
-            {sourceType === "curriculum" ? "Välj Ämnen" : "Välj Dokument"}
-          </h3>
-          
-          {sourceType === "curriculum" && (
-            <div className={styles.fcTopicChips}>
-              <button
-                className={`${styles.fcTopicChip} ${
-                  selectedTopics.length === AVAILABLE_TOPICS.length
-                    ? styles.selected
-                    : ""
-                }`}
-                onClick={selectAll}
-              >
-                Alla
-              </button>
-              {AVAILABLE_TOPICS.map((topic) => (
-                <button
-                  key={topic.id}
-                  className={`${styles.fcTopicChip} ${
-                    selectedTopics.includes(topic.id) ? styles.selected : ""
-                  }`}
-                  onClick={() => toggleTopic(topic.id)}
-                >
-                  {topic.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {sourceType === "material" && (
-            <div className={styles.fcTopicChips}>
-              {materials && materials.length > 0 ? (
-                materials.map((mat) => (
-                  <button
-                    key={mat.id}
-                    className={`${styles.fcTopicChip} ${
-                      selectedMaterialId === mat.id ? styles.selected : ""
-                    }`}
-                    onClick={() => setSelectedMaterialId(mat.id)}
-                  >
-                    📄 {mat.filename}
-                  </button>
-                ))
-              ) : (
-                <p style={{ color: "var(--color-text-muted)" }}>Inga uppladdade dokument. Gå till Material för att ladda upp.</p>
-              )}
-            </div>
-          )}
-
-          <div className={styles.fcCountRow} style={{ marginTop: "var(--space-6)" }}>
-            <span className={styles.fcCountLabel}>Antal kort:</span>
-            <select
-              className={styles.fcCountSelect}
-              value={cardCount}
-              onChange={(e) => setCardCount(Number(e.target.value))}
-            >
-              <option value={5}>5 kort</option>
-              <option value={10}>10 kort</option>
-              <option value={15}>15 kort</option>
-              <option value={20}>20 kort</option>
-            </select>
-          </div>
-
-          <button
-            className="btn btn-primary btn-lg"
-            disabled={sourceType === "curriculum" ? selectedTopics.length === 0 : !selectedMaterialId}
-            onClick={handleGenerate}
-          >
-            🧠 Generera {cardCount} flashcards {sourceType === "curriculum" ? `(${selectedTopics.length} ämne${selectedTopics.length !== 1 ? "n" : ""})` : "(1 dokument)"}
-          </button>
-        </div>
-      )}
-
       {/* === Loading === */}
       {phase === "loading" && (
         <div className={styles.fcLoading}>
           <div className={styles.fcLoadingIcon}>🃏</div>
-          <h3>Skapar flashcards...</h3>
-          <p style={{ color: "var(--color-text-secondary)" }}>
-            AI genererar {cardCount} minneslappar. Några sekunder...
+          <h3>Laddar kortlekar...</h3>
+        </div>
+      )}
+
+      {/* === Deck Selection === */}
+      {phase === "deckSelect" && (
+        <div className={styles.fcSetup}>
+          <p
+            style={{
+              color: "var(--color-text-secondary)",
+              marginBottom: "var(--space-6)",
+            }}
+          >
+            Välj en kartlek att studera. Korten repeteras automatiskt baserat på
+            din prestation.
           </p>
+
+          {decks.length === 0 ? (
+            <div
+              className="card"
+              style={{ padding: "var(--space-8)", textAlign: "center" }}
+            >
+              <span style={{ fontSize: "3rem", display: "block", marginBottom: "var(--space-4)" }}>📄</span>
+              <h3>Inga kortlekar ännu</h3>
+              <p
+                style={{
+                  color: "var(--color-text-secondary)",
+                  marginTop: "var(--space-2)",
+                  marginBottom: "var(--space-4)",
+                }}
+              >
+                Ladda upp ett dokument under Material och klicka &quot;Extrahera
+                alla kunskapspunkter&quot; för att skapa din första kartlek.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+              {decks.map((deck) => {
+                const stats = deckStats[deck.id] || {
+                  total: deck.total_cards,
+                  mastered: 0,
+                  due: 0,
+                  newCards: deck.total_cards,
+                };
+                const masteryPercent =
+                  stats.total > 0
+                    ? Math.round((stats.mastered / stats.total) * 100)
+                    : 0;
+                const actionCount = stats.due + stats.newCards;
+
+                return (
+                  <div
+                    key={deck.id}
+                    className="card"
+                    style={{ padding: "var(--space-5)", cursor: "pointer", transition: "border-color 0.2s" }}
+                    onClick={() => startStudy(deck.id)}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "var(--space-3)",
+                      }}
+                    >
+                      <div>
+                        <h3 style={{ marginBottom: "var(--space-1)" }}>
+                          📚 {deck.title}
+                        </h3>
+                        <span
+                          style={{
+                            fontSize: "var(--text-xs)",
+                            color: "var(--color-text-muted)",
+                          }}
+                        >
+                          {stats.total} kort totalt
+                        </span>
+                      </div>
+                      <button
+                        className={`btn ${actionCount > 0 ? "btn-primary" : "btn-secondary"}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startStudy(deck.id);
+                        }}
+                      >
+                        {actionCount > 0
+                          ? `📖 Studera (${actionCount})`
+                          : "✅ Allt klart!"}
+                      </button>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="progress-bar" style={{ marginBottom: "var(--space-3)" }}>
+                      <div
+                        className={`progress-bar-fill ${
+                          masteryPercent >= 80
+                            ? "success"
+                            : masteryPercent >= 40
+                            ? "warning"
+                            : "danger"
+                        }`}
+                        style={{ width: `${masteryPercent}%` }}
+                      />
+                    </div>
+
+                    {/* Mini stats */}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "var(--space-4)",
+                        fontSize: "var(--text-xs)",
+                      }}
+                    >
+                      <span style={{ color: "var(--color-success)" }}>
+                        ✅ {stats.mastered} behärskade
+                      </span>
+                      <span style={{ color: "var(--color-warning)" }}>
+                        🔄 {stats.due} att repetera
+                      </span>
+                      <span style={{ color: "var(--color-text-muted)" }}>
+                        🆕 {stats.newCards} nya
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -287,13 +411,13 @@ export default function FlashcardsPage() {
           {/* Progress */}
           <div className={styles.fcProgress}>
             <span className={styles.fcProgressText}>
-              {currentIndex + 1} / {deck.cards.length}
+              {currentIndex + 1} / {studyCards.length}
             </span>
             <div className={`progress-bar ${styles.fcProgressBar}`}>
               <div
                 className="progress-bar-fill"
                 style={{
-                  width: `${(currentIndex / deck.cards.length) * 100}%`,
+                  width: `${(currentIndex / studyCards.length) * 100}%`,
                 }}
               />
             </div>
@@ -305,25 +429,29 @@ export default function FlashcardsPage() {
           </div>
 
           {/* Card */}
-          <div className={styles.fcCardWrapper} onClick={handleFlip}>
+          <div
+            className={styles.fcCardWrapper}
+            onClick={() => setFlipped(!flipped)}
+          >
             <div
               className={`${styles.fcCard} ${flipped ? styles.flipped : ""}`}
             >
               {/* Front */}
               <div className={`${styles.fcCardFace} ${styles.fcFront}`}>
                 <span className={`badge badge-info ${styles.fcCardType}`}>
-                  {TYPE_LABELS[currentCard.type] || currentCard.type}
+                  {TYPE_LABELS[currentCard.card_type] ||
+                    currentCard.card_type}
                 </span>
                 <span
                   className={`badge ${
-                    currentCard.gradeLevel === "A"
+                    currentCard.grade_level === "A"
                       ? "badge-success"
-                      : currentCard.gradeLevel === "C"
+                      : currentCard.grade_level === "C"
                       ? "badge-warning"
                       : "badge-danger"
                   } ${styles.fcCardGrade}`}
                 >
-                  {currentCard.gradeLevel}
+                  {currentCard.grade_level}
                 </span>
                 <span className={styles.fcFrontLabel}>Fråga</span>
                 <p className={styles.fcFrontText}>{currentCard.front}</p>
@@ -335,18 +463,19 @@ export default function FlashcardsPage() {
               {/* Back */}
               <div className={`${styles.fcCardFace} ${styles.fcBack}`}>
                 <span className={`badge badge-info ${styles.fcCardType}`}>
-                  {TYPE_LABELS[currentCard.type] || currentCard.type}
+                  {TYPE_LABELS[currentCard.card_type] ||
+                    currentCard.card_type}
                 </span>
                 <span
                   className={`badge ${
-                    currentCard.gradeLevel === "A"
+                    currentCard.grade_level === "A"
                       ? "badge-success"
-                      : currentCard.gradeLevel === "C"
+                      : currentCard.grade_level === "C"
                       ? "badge-warning"
                       : "badge-danger"
                   } ${styles.fcCardGrade}`}
                 >
-                  {currentCard.gradeLevel}
+                  {currentCard.grade_level}
                 </span>
                 <span className={styles.fcBackLabel}>Svar</span>
                 <p className={styles.fcBackText}>{currentCard.back}</p>
@@ -366,6 +495,7 @@ export default function FlashcardsPage() {
               >
                 <span className={styles.fcRatingEmoji}>😫</span>
                 <span className={styles.fcRatingLabel}>Svårt</span>
+                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>Imorgon</span>
               </button>
               <button
                 className={`${styles.fcRatingBtn} ${styles.ok}`}
@@ -373,6 +503,7 @@ export default function FlashcardsPage() {
               >
                 <span className={styles.fcRatingEmoji}>🤔</span>
                 <span className={styles.fcRatingLabel}>Osäker</span>
+                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>Om 2-3 dagar</span>
               </button>
               <button
                 className={`${styles.fcRatingBtn} ${styles.easy}`}
@@ -380,6 +511,7 @@ export default function FlashcardsPage() {
               >
                 <span className={styles.fcRatingEmoji}>✅</span>
                 <span className={styles.fcRatingLabel}>Kan det!</span>
+                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-muted)" }}>Om 1 vecka+</span>
               </button>
             </div>
           )}
@@ -392,11 +524,16 @@ export default function FlashcardsPage() {
           <div className={styles.fcResultsEmoji}>
             {hardCount === 0 ? "🌟" : hardCount <= 2 ? "👍" : "💪"}
           </div>
-          <h2>Kortleken klar!</h2>
-          <p style={{ color: "var(--color-text-secondary)", marginTop: "var(--space-2)" }}>
+          <h2>Session klar!</h2>
+          <p
+            style={{
+              color: "var(--color-text-secondary)",
+              marginTop: "var(--space-2)",
+            }}
+          >
             {hardCount === 0
-              ? "Fantastiskt! Du behärskar alla kort!"
-              : `Du har ${hardCount} kort att repetera.`}
+              ? "Fantastiskt! Du behärskade alla kort i denna session!"
+              : `Du har ${hardCount} kort som behöver mer repetition.`}
           </p>
 
           <div className={styles.fcResultsStats}>
@@ -429,17 +566,84 @@ export default function FlashcardsPage() {
             </div>
           </div>
 
+          {/* Deck mastery overview */}
+          {selectedDeckStats && (
+            <div
+              className="card"
+              style={{
+                padding: "var(--space-5)",
+                marginBottom: "var(--space-6)",
+                textAlign: "left",
+              }}
+            >
+              <h3 style={{ marginBottom: "var(--space-3)" }}>
+                📊 Dokumentets totala framsteg
+              </h3>
+              <div className="progress-bar" style={{ marginBottom: "var(--space-2)" }}>
+                <div
+                  className={`progress-bar-fill ${
+                    selectedDeckStats.total > 0 &&
+                    selectedDeckStats.mastered / selectedDeckStats.total >= 0.8
+                      ? "success"
+                      : selectedDeckStats.mastered / selectedDeckStats.total >=
+                        0.4
+                      ? "warning"
+                      : "danger"
+                  }`}
+                  style={{
+                    width: `${
+                      selectedDeckStats.total > 0
+                        ? Math.round(
+                            (selectedDeckStats.mastered /
+                              selectedDeckStats.total) *
+                              100
+                          )
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: "var(--text-sm)",
+                  color: "var(--color-text-secondary)",
+                }}
+              >
+                <span>
+                  ✅ {selectedDeckStats.mastered} / {selectedDeckStats.total}{" "}
+                  behärskade
+                </span>
+                <span>
+                  {selectedDeckStats.total > 0
+                    ? Math.round(
+                        (selectedDeckStats.mastered /
+                          selectedDeckStats.total) *
+                          100
+                      )
+                    : 0}
+                  %
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className={styles.fcResultsActions}>
-            {hardCount > 0 && (
-              <button className="btn btn-primary" onClick={handleStudyAgain}>
-                🔄 Repetera svåra kort ({hardCount})
-              </button>
-            )}
-            <button className="btn btn-secondary" onClick={handleGenerate}>
-              🧠 Ny kortlek
+            <button
+              className="btn btn-primary"
+              onClick={() => startStudy(selectedDeckId)}
+            >
+              📖 Studera igen
             </button>
-            <button className="btn btn-ghost" onClick={handleRestart}>
-              ⚙️ Ändra inställningar
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                setPhase("deckSelect");
+                loadDecks();
+              }}
+            >
+              ← Tillbaka till kortlekar
             </button>
           </div>
         </div>

@@ -1,18 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSubject } from "@/lib/subject-context";
+import { supabase } from "@/lib/supabase";
 import styles from "./kunskapskarta.module.css";
 
-// Mock progress data — in production this comes from DB after analysis
-const MOCK_PROGRESS = {
-  cc1: { mastery: 20, quizScore: 0, flashcardsDone: 0, documentsCount: 0 },
-  cc2: { mastery: 65, quizScore: 72, flashcardsDone: 8, documentsCount: 1 },
-  cc3: { mastery: 40, quizScore: 50, flashcardsDone: 3, documentsCount: 1 },
-  cc4: { mastery: 10, quizScore: 0, flashcardsDone: 0, documentsCount: 0 },
-  cc5: { mastery: 0, quizScore: 0, flashcardsDone: 0, documentsCount: 0 },
-};
+
 
 function getStatus(mastery) {
   if (mastery >= 80) return "mastered";
@@ -52,10 +46,92 @@ export default function KunskapskartaPage() {
   const router = useRouter();
   const { curriculum } = useSubject();
   const [expandedNode, setExpandedNode] = useState(null);
+  const [progress, setProgress] = useState({});
+  const [loadingProgress, setLoadingProgress] = useState(true);
+
+  useEffect(() => {
+    loadRealProgress();
+  }, []);
+
+  const loadRealProgress = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setLoadingProgress(false);
+      return;
+    }
+
+    // Get all user's decks with their cards
+    const { data: decks } = await supabase
+      .from('flashcard_decks')
+      .select('id, total_cards')
+      .eq('user_id', session.user.id)
+      .eq('status', 'ready');
+
+    if (!decks || decks.length === 0) {
+      setLoadingProgress(false);
+      return;
+    }
+
+    // Get all cards across all decks
+    const deckIds = decks.map(d => d.id);
+    const { data: allCards } = await supabase
+      .from('flashcards')
+      .select('id, deck_id')
+      .in('deck_id', deckIds);
+
+    const totalCards = allCards?.length || 0;
+    if (totalCards === 0) {
+      setLoadingProgress(false);
+      return;
+    }
+
+    const cardIds = allCards.map(c => c.id);
+
+    // Get all reviews
+    const { data: reviews } = await supabase
+      .from('flashcard_reviews')
+      .select('card_id, rating, interval_days, next_review_at')
+      .eq('user_id', session.user.id)
+      .in('card_id', cardIds)
+      .order('reviewed_at', { ascending: false });
+
+    // Build latest review per card
+    const latestByCard = {};
+    if (reviews) {
+      for (const r of reviews) {
+        if (!latestByCard[r.card_id]) latestByCard[r.card_id] = r;
+      }
+    }
+
+    let mastered = 0;
+    let reviewed = 0;
+    for (const review of Object.values(latestByCard)) {
+      reviewed++;
+      if (review.interval_days >= 7 && review.rating === 'easy') mastered++;
+    }
+
+    // Compute a single overall mastery percentage
+    const overallMastery = totalCards > 0 ? Math.round((mastered / totalCards) * 100) : 0;
+    const flashcardsDone = reviewed;
+    const documentsCount = decks.length;
+
+    // Distribute evenly across all curriculum nodes (since cards aren't mapped to specific CC yet)
+    const newProgress = {};
+    for (const cc of curriculum.centralContent) {
+      newProgress[cc.id] = {
+        mastery: overallMastery,
+        quizScore: 0,
+        flashcardsDone: Math.round(flashcardsDone / curriculum.centralContent.length),
+        documentsCount,
+      };
+    }
+    setProgress(newProgress);
+    setLoadingProgress(false);
+  };
 
   const nodes = curriculum.centralContent.map((cc) => ({
     ...cc,
-    progress: MOCK_PROGRESS[cc.id] || { mastery: 0, quizScore: 0, flashcardsDone: 0, documentsCount: 0 },
+    progress: progress[cc.id] || { mastery: 0, quizScore: 0, flashcardsDone: 0, documentsCount: 0 },
   }));
 
   // Overall stats
