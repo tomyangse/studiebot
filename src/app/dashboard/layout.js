@@ -46,7 +46,7 @@ function DashboardLayoutInner({ children }) {
     {
       role: "ai",
       content:
-        "Hej! 👋 Jag är din studieassistent. Jag kan hjälpa dig att förstå ditt material, skapa quiz eller förklara begrepp. Vad vill du jobba med?",
+        "Hej! 👋 Jag är din AI-lärare. Jag svarar utifrån din kursplan och ditt uppladdade material — inget påhittat! Ställ en fråga så hjälper jag dig.",
     },
   ]);
   const [chatInput, setChatInput] = useState("");
@@ -100,21 +100,41 @@ function DashboardLayoutInner({ children }) {
 
     const userMessage = chatInput.trim();
     setChatInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    const updatedMessages = [...messages, { role: "user", content: userMessage }];
+    setMessages(updatedMessages);
     setChatLoading(true);
 
-    // Simulate AI response (will be replaced with Gemini RAG)
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/tutor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userMessage,
+          conversationHistory: updatedMessages.slice(-10), // Last 10 messages for context
+          accessToken: session?.access_token,
+          subjectCode: activeSubject,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setMessages((prev) => [...prev, { role: "ai", content: data.reply }]);
+      } else {
+        setMessages((prev) => [...prev, {
           role: "ai",
-          content:
-            "Det är en bra fråga! 🤔 Låt mig tänka på det... (AI-integration kommer snart — just nu är jag en demo-assistent.)",
-        },
-      ]);
+          content: "⚠️ Något gick fel. Försök igen om en stund.",
+        }]);
+      }
+    } catch (err) {
+      console.error("Tutor chat error:", err);
+      setMessages((prev) => [...prev, {
+        role: "ai",
+        content: "⚠️ Kunde inte nå AI-servern. Kontrollera din internetanslutning.",
+      }]);
+    } finally {
       setChatLoading(false);
-    }, 1500);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -324,26 +344,26 @@ function DashboardLayoutInner({ children }) {
               <button
                 className={styles.chatSuggestion}
                 onClick={() => {
-                  setChatInput("Förklara industriella revolutionen");
+                  setChatInput("Vad handlar mitt uppladdade material om?");
                 }}
               >
-                📝 Förklara ett begrepp
+                📄 Sammanfatta material
               </button>
               <button
                 className={styles.chatSuggestion}
                 onClick={() => {
-                  setChatInput("Skapa ett quiz om världskrigen");
+                  setChatInput("Vilka är de viktigaste begreppen jag bör kunna?");
                 }}
               >
-                ❓ Skapa quiz
+                📝 Viktiga begrepp
               </button>
               <button
                 className={styles.chatSuggestion}
                 onClick={() => {
-                  setChatInput("Hjälp mig göra en studieplan");
+                  setChatInput("Vad bör jag fokusera på för att nå betyg A?");
                 }}
               >
-                📅 Studieplan
+                🎯 Tips för betyg A
               </button>
             </div>
           )}
