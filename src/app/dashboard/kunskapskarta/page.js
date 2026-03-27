@@ -48,10 +48,88 @@ export default function KunskapskartaPage() {
   const [expandedNode, setExpandedNode] = useState(null);
   const [progress, setProgress] = useState({});
   const [loadingProgress, setLoadingProgress] = useState(true);
+  const [documents, setDocuments] = useState([]);
+  const [deletingDocId, setDeletingDocId] = useState(null);
 
   useEffect(() => {
     loadRealProgress();
+    loadDocuments();
   }, []);
+
+  const loadDocuments = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    // Get documents with their associated decks
+    const { data: docs } = await supabase
+      .from('documents')
+      .select('id, file_name, file_size, subject_code, status, created_at')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false });
+
+    if (!docs) return;
+
+    // Get decks linked to these documents
+    const docIds = docs.map(d => d.id);
+    const { data: decks } = await supabase
+      .from('flashcard_decks')
+      .select('id, document_id, total_cards, status')
+      .in('document_id', docIds);
+
+    // Get analysis data
+    const { data: analyses } = await supabase
+      .from('document_analysis')
+      .select('document_id, extracted_topics, overall_coverage')
+      .in('document_id', docIds);
+
+    // Merge data
+    const enriched = docs.map(doc => {
+      const deck = decks?.find(d => d.document_id === doc.id);
+      const analysis = analyses?.find(a => a.document_id === doc.id);
+      return {
+        ...doc,
+        deck,
+        analysis,
+      };
+    });
+
+    setDocuments(enriched);
+  };
+
+  const handleDeleteDocument = async (doc) => {
+    if (!confirm(`Är du säker att du vill ta bort "${doc.file_name}"? Alla tillhörande flashcards och quiz-data kommer att raderas.`)) {
+      return;
+    }
+
+    setDeletingDocId(doc.id);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    try {
+      // 1. Delete from storage
+      const { data: docData } = await supabase
+        .from('documents')
+        .select('storage_path')
+        .eq('id', doc.id)
+        .single();
+
+      if (docData?.storage_path) {
+        await supabase.storage.from('study_materials').remove([docData.storage_path]);
+      }
+
+      // 2. Delete from DB (cascades to document_analysis, flashcard_decks -> flashcards -> flashcard_reviews)
+      await supabase.from('documents').delete().eq('id', doc.id);
+
+      // Refresh lists
+      setDocuments(prev => prev.filter(d => d.id !== doc.id));
+      loadRealProgress(); // Refresh mastery stats
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('Kunde inte ta bort dokumentet.');
+    } finally {
+      setDeletingDocId(null);
+    }
+  };
 
   const loadRealProgress = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -367,6 +445,98 @@ export default function KunskapskartaPage() {
           </div>
         </div>
       )}
+      {/* === Uploaded Documents Section === */}
+      <div style={{ marginTop: 'var(--space-8)' }}>
+        <h2 style={{ marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          📄 Uppladdat material
+          <span className="badge badge-info" style={{ fontSize: 'var(--text-xs)' }}>{documents.length}</span>
+        </h2>
+
+        {documents.length === 0 ? (
+          <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+            <p style={{ color: 'var(--color-text-muted)' }}>
+              Inga dokument uppladdade ännu. Gå till Material för att ladda upp studiematerial.
+            </p>
+            <button
+              className="btn btn-primary btn-sm"
+              style={{ marginTop: 'var(--space-3)' }}
+              onClick={() => router.push('/dashboard/material')}
+            >
+              📄 Ladda upp material
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            {documents.map((doc) => {
+              const sizeStr = doc.file_size
+                ? doc.file_size < 1024 * 1024
+                  ? `${(doc.file_size / 1024).toFixed(1)} KB`
+                  : `${(doc.file_size / (1024 * 1024)).toFixed(1)} MB`
+                : '';
+              const dateStr = new Date(doc.created_at).toLocaleDateString('sv-SE');
+              const hasDeck = doc.deck && doc.deck.status === 'ready';
+              const cardCount = doc.deck?.total_cards || 0;
+              const coverage = doc.analysis?.overall_coverage || 0;
+              const topics = doc.analysis?.extracted_topics || [];
+
+              return (
+                <div key={doc.id} className="card" style={{ padding: 'var(--space-4)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+                        <span style={{ fontSize: '1.2rem' }}>
+                          {doc.file_name.endsWith('.pdf') ? '📕' : doc.file_name.match(/\.(png|jpg|jpeg)$/i) ? '🖼️' : '📄'}
+                        </span>
+                        <strong style={{ fontSize: 'var(--text-sm)' }}>{doc.file_name}</strong>
+                        <span className={`badge ${doc.status === 'done' ? 'badge-success' : doc.status === 'error' ? 'badge-danger' : 'badge-warning'}`}
+                              style={{ fontSize: 'var(--text-xs)' }}>
+                          {doc.status === 'done' ? '✓ Klar' : doc.status === 'error' ? 'Fel' : 'Bearbetar...'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 'var(--space-4)', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginBottom: 'var(--space-2)' }}>
+                        {sizeStr && <span>📦 {sizeStr}</span>}
+                        <span>📅 {dateStr}</span>
+                        {coverage > 0 && <span>📊 {coverage}% täckning</span>}
+                        {hasDeck && <span style={{ color: 'var(--color-success)' }}>🃏 {cardCount} flashcards</span>}
+                      </div>
+
+                      {topics.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-1)', marginTop: 'var(--space-1)' }}>
+                          {topics.slice(0, 5).map((t, i) => (
+                            <span key={i} style={{
+                              fontSize: 'var(--text-xs)',
+                              padding: '2px 8px',
+                              borderRadius: 'var(--radius-full)',
+                              background: 'var(--color-surface)',
+                              border: '1px solid var(--color-border)',
+                              color: 'var(--color-text-muted)',
+                            }}>
+                              {typeof t === 'string' ? t : t.title || t.name || ''}
+                            </span>
+                          ))}
+                          {topics.length > 5 && (
+                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>+{topics.length - 5} till</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--color-danger)', flexShrink: 0 }}
+                      disabled={deletingDocId === doc.id}
+                      onClick={() => handleDeleteDocument(doc)}
+                    >
+                      {deletingDocId === doc.id ? '⏳' : '🗑️'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
