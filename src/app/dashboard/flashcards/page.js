@@ -45,6 +45,7 @@ export default function FlashcardsPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [sessionRatings, setSessionRatings] = useState([]); // { cardId, rating }
+  const [sessionSize, setSessionSize] = useState(15); // total cards per session
 
   // Deck stats (fetched per-deck)
   const [deckStats, setDeckStats] = useState({}); // deckId -> { total, mastered, due, new }
@@ -195,10 +196,12 @@ export default function FlashcardsPage() {
       // else: not yet due, skip
     }
 
-    // Build session: up to 5 due cards + up to 10 new cards
+    // Build session: prioritize due cards, then fill with new cards up to sessionSize
+    const dueSlice = dueCards.slice(0, sessionSize);
+    const remainingSlots = Math.max(0, sessionSize - dueSlice.length);
     const sessionCards = [
-      ...dueCards.slice(0, 5),
-      ...newCards.slice(0, 10),
+      ...dueSlice,
+      ...newCards.slice(0, remainingSlots),
     ];
 
     if (sessionCards.length === 0) {
@@ -290,6 +293,28 @@ export default function FlashcardsPage() {
             Välj en kartlek att studera. Korten repeteras automatiskt baserat på
             din prestation.
           </p>
+
+          {/* Session size selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>Kort per session:</span>
+            {[10, 15, 25, 50, 100].map((n) => (
+              <button
+                key={n}
+                className={`btn ${sessionSize === n ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: 'var(--space-1) var(--space-3)', fontSize: 'var(--text-sm)' }}
+                onClick={() => setSessionSize(n)}
+              >
+                {n}
+              </button>
+            ))}
+            <button
+              className={`btn ${sessionSize === 9999 ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ padding: 'var(--space-1) var(--space-3)', fontSize: 'var(--text-sm)' }}
+              onClick={() => setSessionSize(9999)}
+            >
+              Alla
+            </button>
+          </div>
 
           {decks.length === 0 ? (
             <div
