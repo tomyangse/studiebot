@@ -11,9 +11,9 @@ import styles from "./dashboard.module.css";
 const NAV_ITEMS = [
   { href: "/dashboard", icon: "📊", label: "Översikt" },
   { href: "/dashboard/material", icon: "📄", label: "Material" },
-  { href: "/dashboard/kunskapskarta", icon: "🗺️", label: "Kunskapskarta" },
-  { href: "/dashboard/quiz", icon: "❓", label: "Quiz" },
   { href: "/dashboard/flashcards", icon: "🃏", label: "Flashcards" },
+  { href: "/dashboard/quiz", icon: "📋", label: "Prov" },
+  { href: "/dashboard/kunskapskarta", icon: "🗺️", label: "Kunskapskarta" },
 ];
 
 import { MaterialProvider } from "@/lib/material-context";
