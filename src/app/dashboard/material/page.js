@@ -25,7 +25,7 @@ export default function MaterialPage() {
     e.preventDefault();
     setDragging(false);
     const dropped = e.dataTransfer.files[0];
-    if (dropped && dropped.type === "application/pdf") {
+    if (dropped) {
       setFile(dropped);
     }
   }, []);
@@ -87,15 +87,15 @@ export default function MaterialPage() {
           onDrop={handleDrop}
         >
           <div className={styles.uploadZoneIcon}>📤</div>
-          <h3>Dra och släpp din PDF här</h3>
+          <h3>Dra och släpp ditt dokument här</h3>
           <p>eller klicka för att välja fil</p>
           <div className={styles.uploadFormats}>
-            <span className={styles.uploadFormatTag}>PDF</span>
+            <span className={styles.uploadFormatTag}>PDF / BILD / TXT</span>
             <span className={styles.uploadFormatTag}>Max 20 MB</span>
           </div>
           <input
             type="file"
-            accept=".pdf"
+            accept=".pdf,image/*,.txt,.md,.csv"
             onChange={handleFileChange}
           />
         </div>

@@ -22,7 +22,7 @@ export async function POST(req) {
     const base64Data = Buffer.from(arrayBuffer).toString("base64");
 
     const prompt = `
-Du är en svensk gymnasielärare och studiecoach. Uppgiften är att analysera bifogat studiematerial (PDF)
+Du är en svensk gymnasielärare och studiecoach. Uppgiften är att analysera bifogat studiematerial
 och matcha det mot Skolverkets ämnesplan för ${HISTORIA_1B_CURRICULUM.levelName} (${subjectCode}).
 
 Här är ämnesplanens "Centralt Innehåll":
@@ -55,16 +55,15 @@ Svara EXAKT i denna JSON-struktur utan Markdown-kodblock eller extratext runt om
 
     const model = getGeminiModel("gemini-2.5-flash");
 
-    // We pass the PDF as inline data directly
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType: "application/pdf",
+      const result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: base64Data,
+            mimeType: file.type || "application/pdf",
+          },
         },
-      },
-    ]);
+      ]);
 
     let textResponse = result.response.text();
     textResponse = textResponse.replace(/```json/g, "").replace(/```/g, "").trim();
