@@ -430,6 +430,14 @@ export default function QuizPage() {
                     </ul>
                   </div>
                 )}
+
+                {/* Model answer */}
+                {currentQuestion.modelAnswer && (
+                  <div className={styles.modelAnswer}>
+                    <span className={styles.modelAnswerLabel}>📋 Modellsvar (exempelsvar för full poäng):</span>
+                    <p className={styles.modelAnswerText}>{currentQuestion.modelAnswer}</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
