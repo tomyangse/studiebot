@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { HISTORIA_1B_CURRICULUM } from "@/lib/curriculum-data";
+import { useSubject } from "@/lib/subject-context";
 import styles from "./quiz.module.css";
 
 const DIFFICULTY_OPTIONS = [
@@ -11,13 +11,13 @@ const DIFFICULTY_OPTIONS = [
   { value: "A", emoji: "📕", label: "A-nivå", desc: "Avancerad" },
 ];
 
-const AVAILABLE_TOPICS = HISTORIA_1B_CURRICULUM.centralContent.map((cc) => ({
-  id: cc.id,
-  label: cc.title,
-}));
-
 export default function QuizPage() {
-  const [phase, setPhase] = useState("setup"); // setup | loading | active | results
+  const { curriculum } = useSubject();
+  const availableTopics = curriculum.centralContent.map((cc) => ({
+    id: cc.id,
+    label: cc.title,
+  }));
+  const [phase, setPhase] = useState("setup");
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [difficulty, setDifficulty] = useState("mixed");
   const [quiz, setQuiz] = useState(null);
@@ -33,19 +33,19 @@ export default function QuizPage() {
   };
 
   const selectAll = () => {
-    if (selectedTopics.length === AVAILABLE_TOPICS.length) {
+    if (selectedTopics.length === availableTopics.length) {
       setSelectedTopics([]);
     } else {
-      setSelectedTopics(AVAILABLE_TOPICS.map((t) => t.id));
+      setSelectedTopics(availableTopics.map((t) => t.id));
     }
   };
 
   const handleGenerate = async () => {
     setPhase("loading");
     try {
-      const topicLabels = AVAILABLE_TOPICS.filter((t) =>
-        selectedTopics.includes(t.id)
-      ).map((t) => t.label);
+      const topicLabels = availableTopics
+        .filter((t) => selectedTopics.includes(t.id))
+        .map((t) => t.label);
 
       const res = await fetch("/api/quiz", {
         method: "POST",
@@ -69,16 +69,15 @@ export default function QuizPage() {
       }
     } catch (err) {
       console.error(err);
-      alert("Ett fel uppstod. Försök igen.");
+      alert("Ett fel uppstod.");
       setPhase("setup");
     }
   };
 
   const handleAnswer = (optionIndex) => {
-    if (selectedAnswer !== null) return; // Already answered
+    if (selectedAnswer !== null) return;
     setSelectedAnswer(optionIndex);
     setShowExplanation(true);
-
     const isCorrect = optionIndex === quiz.questions[currentQ].correctIndex;
     setAnswers((prev) => [...prev, { questionIndex: currentQ, optionIndex, isCorrect }]);
   };
@@ -129,9 +128,8 @@ export default function QuizPage() {
 
   return (
     <div className={styles.quizPage}>
-      <h1>❓ Quiz</h1>
+      <h1>{"❓"} Quiz</h1>
 
-      {/* === Setup Phase === */}
       {phase === "setup" && (
         <div className={styles.quizSetup}>
           <p style={{ color: "var(--color-text-secondary)", marginBottom: "var(--space-6)" }}>
@@ -142,13 +140,13 @@ export default function QuizPage() {
           <div className={styles.topicChips}>
             <button
               className={`${styles.topicChip} ${
-                selectedTopics.length === AVAILABLE_TOPICS.length ? styles.selected : ""
+                selectedTopics.length === availableTopics.length ? styles.selected : ""
               }`}
               onClick={selectAll}
             >
               Alla
             </button>
-            {AVAILABLE_TOPICS.map((topic) => (
+            {availableTopics.map((topic) => (
               <button
                 key={topic.id}
                 className={`${styles.topicChip} ${
@@ -183,15 +181,14 @@ export default function QuizPage() {
             disabled={selectedTopics.length === 0}
             onClick={handleGenerate}
           >
-            🧠 Generera quiz ({selectedTopics.length} ämne{selectedTopics.length !== 1 ? "n" : ""})
+            {"🧠"} Generera quiz ({selectedTopics.length} ämne{selectedTopics.length !== 1 ? "n" : ""})
           </button>
         </div>
       )}
 
-      {/* === Loading Phase === */}
       {phase === "loading" && (
         <div className={styles.quizLoading}>
-          <div className={styles.quizLoadingIcon}>🧠</div>
+          <div className={styles.quizLoadingIcon}>{"🧠"}</div>
           <h3>Genererar quiz...</h3>
           <p style={{ color: "var(--color-text-secondary)" }}>
             AI skapar frågor baserade på din ämnesplan. Några sekunder...
@@ -199,7 +196,6 @@ export default function QuizPage() {
         </div>
       )}
 
-      {/* === Active Quiz Phase === */}
       {phase === "active" && quiz && (
         <div className={styles.quizActive}>
           <div className={styles.quizProgress}>
@@ -270,7 +266,6 @@ export default function QuizPage() {
         </div>
       )}
 
-      {/* === Results Phase === */}
       {phase === "results" && quiz && (
         <div className={styles.quizResults}>
           <div className={styles.resultsHeader}>
@@ -283,19 +278,13 @@ export default function QuizPage() {
 
           <div className={styles.resultsStats}>
             <div className={`card ${styles.resultsStat}`}>
-              <div
-                className={styles.resultsStatValue}
-                style={{ color: "var(--color-success)" }}
-              >
+              <div className={styles.resultsStatValue} style={{ color: "var(--color-success)" }}>
                 {correctCount}
               </div>
               <div className={styles.resultsStatLabel}>Rätt</div>
             </div>
             <div className={`card ${styles.resultsStat}`}>
-              <div
-                className={styles.resultsStatValue}
-                style={{ color: "var(--color-danger)" }}
-              >
+              <div className={styles.resultsStatValue} style={{ color: "var(--color-danger)" }}>
                 {quiz.questions.length - correctCount}
               </div>
               <div className={styles.resultsStatLabel}>Fel</div>
@@ -308,12 +297,9 @@ export default function QuizPage() {
             </div>
           </div>
 
-          {/* Review wrong answers */}
           {answers.filter((a) => !a.isCorrect).length > 0 && (
             <>
-              <h3 style={{ marginBottom: "var(--space-3)" }}>
-                Att repetera
-              </h3>
+              <h3 style={{ marginBottom: "var(--space-3)" }}>Att repetera</h3>
               <div className={styles.reviewList}>
                 {answers
                   .filter((a) => !a.isCorrect)
@@ -321,15 +307,12 @@ export default function QuizPage() {
                     const q = quiz.questions[a.questionIndex];
                     return (
                       <div key={i} className={`card ${styles.reviewItem}`}>
-                        <span className={styles.reviewIcon}>📌</span>
+                        <span className={styles.reviewIcon}>{"📌"}</span>
                         <div className={styles.reviewQuestion}>
                           <strong>{q.question}</strong>
                           <span>
                             Rätt svar:{" "}
-                            {q.options[q.correctIndex]?.replace(
-                              /^[A-D]\.\s*/,
-                              ""
-                            )}
+                            {q.options[q.correctIndex]?.replace(/^[A-D]\.\s*/, "")}
                           </span>
                         </div>
                       </div>
@@ -341,10 +324,10 @@ export default function QuizPage() {
 
           <div className={styles.resultsActions}>
             <button className="btn btn-primary" onClick={handleGenerate}>
-              🔄 Nytt quiz
+              {"🔄"} Nytt quiz
             </button>
             <button className="btn btn-secondary" onClick={handleRestart}>
-              ⚙️ Ändra inställningar
+              {"⚙️"} Ändra inställningar
             </button>
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { HISTORIA_1B_CURRICULUM } from "@/lib/curriculum-data";
+import { useSubject } from "@/lib/subject-context";
 import styles from "./kunskapskarta.module.css";
 
 // Mock progress data — in production this comes from DB after analysis
@@ -50,9 +50,9 @@ function getGradeStatus(mastery) {
 
 export default function KunskapskartaPage() {
   const router = useRouter();
+  const { curriculum } = useSubject();
   const [expandedNode, setExpandedNode] = useState(null);
 
-  const curriculum = HISTORIA_1B_CURRICULUM;
   const nodes = curriculum.centralContent.map((cc) => ({
     ...cc,
     progress: MOCK_PROGRESS[cc.id] || { mastery: 0, quizScore: 0, flashcardsDone: 0, documentsCount: 0 },
@@ -106,7 +106,7 @@ export default function KunskapskartaPage() {
 
       {/* Subject header */}
       <div className={`card ${styles.kmSubjectHeader}`}>
-        <span className={styles.kmSubjectIcon}>📜</span>
+        <span className={styles.kmSubjectIcon}>{curriculum.icon}</span>
         <div className={styles.kmSubjectInfo}>
           <div className={styles.kmSubjectName}>{curriculum.levelName}</div>
           <div className={styles.kmSubjectMeta}>

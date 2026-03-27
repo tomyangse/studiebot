@@ -1,13 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { HISTORIA_1B_CURRICULUM } from "@/lib/curriculum-data";
+import { useSubject } from "@/lib/subject-context";
 import styles from "./flashcards.module.css";
-
-const AVAILABLE_TOPICS = HISTORIA_1B_CURRICULUM.centralContent.map((cc) => ({
-  id: cc.id,
-  label: cc.title,
-}));
 
 const TYPE_LABELS = {
   definition: "Definition",
@@ -18,6 +13,11 @@ const TYPE_LABELS = {
 };
 
 export default function FlashcardsPage() {
+  const { curriculum } = useSubject();
+  const AVAILABLE_TOPICS = curriculum.centralContent.map((cc) => ({
+    id: cc.id,
+    label: cc.title,
+  }));
   const [phase, setPhase] = useState("setup"); // setup | loading | study | results
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [cardCount, setCardCount] = useState(10);

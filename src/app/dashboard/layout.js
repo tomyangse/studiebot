@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SubjectProvider, useSubject } from "@/lib/subject-context";
 import styles from "./dashboard.module.css";
 
 const NAV_ITEMS = [
@@ -14,6 +15,16 @@ const NAV_ITEMS = [
 ];
 
 export default function DashboardLayout({ children }) {
+  return (
+    <SubjectProvider>
+      <DashboardLayoutInner>{children}</DashboardLayoutInner>
+    </SubjectProvider>
+  );
+}
+
+function DashboardLayoutInner({ children }) {
+  const { activeSubject, subjects, switchSubject } = useSubject();
+  const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
   const pathname = usePathname();
   const [chatOpen, setChatOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -70,6 +81,40 @@ export default function DashboardLayout({ children }) {
         <div className={styles.sidebarHeader}>
           <span className={styles.sidebarLogoIcon}>📚</span>
           <span className={styles.sidebarLogoText}>StudieMate</span>
+        </div>
+
+        {/* Subject Switcher */}
+        <div className={styles.subjectSwitcher}>
+          <button
+            className={styles.subjectSwitcherBtn}
+            onClick={() => setSubjectDropdownOpen(!subjectDropdownOpen)}
+          >
+            <span className={styles.subjectSwitcherIcon}>{activeSubject.icon}</span>
+            <span className={styles.subjectSwitcherName}>{activeSubject.levelName}</span>
+            <span className={styles.subjectSwitcherArrow}>{subjectDropdownOpen ? '▲' : '▼'}</span>
+          </button>
+          {subjectDropdownOpen && (
+            <div className={styles.subjectDropdown}>
+              {subjects.map((s) => (
+                <button
+                  key={`${s.code}:${s.levelName}`}
+                  className={`${styles.subjectDropdownItem} ${
+                    activeSubject.code === s.code && activeSubject.levelName === s.levelName
+                      ? styles.activeSubject
+                      : ""
+                  }`}
+                  onClick={() => {
+                    switchSubject(s.code, s.levelName);
+                    setSubjectDropdownOpen(false);
+                  }}
+                >
+                  <span>{s.icon}</span>
+                  <span>{s.levelName}</span>
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{s.points}p</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <nav className={styles.sidebarNav}>

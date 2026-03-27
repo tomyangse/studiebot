@@ -193,6 +193,8 @@ export const SUBJECTS = [
 export const HISTORIA_1B_CURRICULUM = {
   subjectCode: "HIS",
   levelName: "Historia 1b",
+  points: 100,
+  icon: "📜",
   purpose:
     "Undervisningen i ämnet historia ska syfta till att eleverna breddar, fördjupar och utvecklar sitt historiemedvetande genom kunskaper om det förflutna.",
   centralContent: [
@@ -258,3 +260,120 @@ export const HISTORIA_1B_CURRICULUM = {
     },
   ],
 };
+
+export const ENGELSKA_5_CURRICULUM = {
+  subjectCode: "ENG",
+  levelName: "Engelska 5",
+  points: 100,
+  icon: "🇬🇧",
+  purpose:
+    "Undervisningen i ämnet engelska ska syfta till att eleverna utvecklar kunskaper i och om engelska språket.",
+  centralContent: [
+    {
+      id: "cc1",
+      title: "Hörförståelse och muntlig produktion",
+      description:
+        "Talad engelska och texter från olika medier. Olika former av samtal, diskussioner och presentationer.",
+      gradeE: "Eleven kan med viss säkerhet lyssna till och förstå talad engelska i normalt tempo.",
+      gradeC: "Eleven kan med säkerhet lyssna till och förstå talad engelska och redogöra för innehållet.",
+      gradeA: "Eleven kan med god säkerhet lyssna till och förstå talad engelska i olika sammanhang och variationer.",
+    },
+    {
+      id: "cc2",
+      title: "Läsförståelse",
+      description:
+        "Skrivna texter i olika genrer: nyhetsartiklar, skönlitteratur, akademiska texter, instruktioner.",
+      gradeE: "Eleven kan läsa och med viss säkerhet förstå innehållet i enkla texter.",
+      gradeC: "Eleven kan läsa och förstå huvudinnehållet i texter av olika slag.",
+      gradeA: "Eleven kan läsa och tolka texter av olika slag på ett nyanserat sätt med god förståelse.",
+    },
+    {
+      id: "cc3",
+      title: "Skriftlig produktion",
+      description:
+        "Skriftlig produktion i olika genrer: uppsatser, brev, e-post. Språklig korrekthet och variation.",
+      gradeE: "Eleven kan skriva enkla texter med viss språklig variation.",
+      gradeC: "Eleven kan skriva sammanhängande texter med god språklig variation och anpassning.",
+      gradeA: "Eleven kan skriva väl strukturerade texter med god språklig variation, precision och anpassning.",
+    },
+    {
+      id: "cc4",
+      title: "Ordförråd och grammatik",
+      description:
+        "Ordförråd och fraser, idiomatiska uttryck. Grammatisk struktur: tempus, kongruens, syntax.",
+      gradeE: "Eleven använder ett grundläggande ordförråd med enkel grammatik.",
+      gradeC: "Eleven använder ett varierat ordförråd med godtagbar grammatik.",
+      gradeA: "Eleven använder ett rikt och nyanserat ordförråd med avancerad grammatik.",
+    },
+  ],
+};
+
+export const MATEMATIK_1B_CURRICULUM = {
+  subjectCode: "MAT",
+  levelName: "Matematik 1b",
+  points: 100,
+  icon: "📐",
+  purpose:
+    "Undervisningen i ämnet matematik ska syfta till att eleverna utvecklar förmåga att arbeta matematiskt.",
+  centralContent: [
+    {
+      id: "cc1",
+      title: "Taluppfattning, aritmetik och algebra",
+      description:
+        "Reella tal, potenser, kvadratrötter. Algebraiska uttryck, formler och ekvationer av första och andra graden.",
+      gradeE: "Eleven kan hantera grundläggande algebraiska uttryck och lösa enkla ekvationer.",
+      gradeC: "Eleven kan hantera algebraiska uttryck och lösa ekvationer samt motivera lösningsmetoder.",
+      gradeA: "Eleven kan hantera komplexa algebraiska uttryck och lösa ekvationer samt analysera och generalisera lösningsmetoderna.",
+    },
+    {
+      id: "cc2",
+      title: "Funktioner och samband",
+      description:
+        "Linjära funktioner, exponentialfunktioner, potens- och andragradsfunktioner. Grafer och tolkningar.",
+      gradeE: "Eleven kan beskriva och använda linjära funktioner i grundläggande sammanhang.",
+      gradeC: "Eleven kan analysera funktioner och samband samt använda dem för att lösa problem.",
+      gradeA: "Eleven kan analysera komplexa samband med funktioner och använda dem i nya situationer.",
+    },
+    {
+      id: "cc3",
+      title: "Sannolikhet och statistik",
+      description:
+        "Begreppen sannolikhet, frekvens, medelvärde, median, typvärde och standardavvikelse. Kombinatorik.",
+      gradeE: "Eleven kan beräkna enkla sannolikheter och tolka grundläggande statistik.",
+      gradeC: "Eleven kan använda metoder för att beräkna sannolikheter och analysera statistisk data.",
+      gradeA: "Eleven kan analysera och värdera statistisk data samt tillämpa avancerade sannolikhetsberäkningar.",
+    },
+    {
+      id: "cc4",
+      title: "Geometri",
+      description:
+        "Geometriska begrepp, satser och bevis. Area, volym, symmetri och likformighet. Trigonometri.",
+      gradeE: "Eleven kan använda grundläggande geometriska begrepp och beräkna area och volym.",
+      gradeC: "Eleven kan tillämpa geometriska satser och motivera beräkningar.",
+      gradeA: "Eleven kan tillämpa och bevisa geometriska samband samt generalisera lösningar.",
+    },
+    {
+      id: "cc5",
+      title: "Problemlösning och matematiska resonemang",
+      description:
+        "Strategier för problemlösning, matematisk argumentation och bevisföring. Matematiska modeller.",
+      gradeE: "Eleven kan använda enkla strategier för att formulera och lösa matematiska problem.",
+      gradeC: "Eleven kan använda strategier och föra resonemang för att lösa problem i flera steg.",
+      gradeA: "Eleven kan formulera, analysera och lösa komplexa matematiska problem med väl underbyggda resonemang.",
+    },
+  ],
+};
+
+/* Lookup map — key = "subjectCode:levelName" */
+export const CURRICULUM_MAP = {
+  "HIS:Historia 1b": HISTORIA_1B_CURRICULUM,
+  "ENG:Engelska 5": ENGELSKA_5_CURRICULUM,
+  "MAT:Matematik 1b": MATEMATIK_1B_CURRICULUM,
+};
+
+/* List of available subjects for the subject selector */
+export const AVAILABLE_SUBJECTS = [
+  { code: "HIS", levelName: "Historia 1b", icon: "📜", points: 100 },
+  { code: "ENG", levelName: "Engelska 5", icon: "🇬🇧", points: 100 },
+  { code: "MAT", levelName: "Matematik 1b", icon: "📐", points: 100 },
+];
