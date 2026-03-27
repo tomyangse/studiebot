@@ -1,124 +1,122 @@
-.authPage {
-  min-height: 100vh;
+.loginContainer {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-4);
-  position: relative;
-  overflow: hidden;
+  min-height: 100vh;
+  padding: var(--space-6);
+  background-color: var(--color-bg);
 }
 
-.authPage::before {
-  content: '';
-  position: absolute;
-  top: -30%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 700px;
-  height: 700px;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-.authContainer {
+.loginCard {
   width: 100%;
-  max-width: 420px;
-  position: relative;
-  z-index: 1;
-  animation: slide-up 0.4s ease;
+  max-width: 400px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
 }
 
-.authHeader {
+.loginHeader {
   text-align: center;
   margin-bottom: var(--space-8);
 }
 
-.authLogo {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: var(--text-2xl);
-  font-weight: var(--weight-bold);
-  color: var(--color-text);
-  text-decoration: none;
-  margin-bottom: var(--space-6);
-}
-
-.authLogoIcon {
-  width: 44px;
-  height: 44px;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-info));
-  border-radius: var(--radius-xl);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--text-xl);
-}
-
-.authHeader h1 {
-  font-size: var(--text-2xl);
+.logoIcon {
+  font-size: 2.5rem;
   margin-bottom: var(--space-2);
 }
 
-.authHeader p {
+.loginHeader h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+
+.loginHeader p {
   color: var(--color-text-secondary);
-  font-size: var(--text-sm);
-}
-
-.authCard {
-  padding: var(--space-8);
-}
-
-.authForm {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
+  font-size: 0.95rem;
 }
 
 .formGroup {
-  display: flex;
-  flex-direction: column;
+  margin-bottom: var(--space-4);
 }
 
-.formError {
+.formGroup label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.submitBtn {
+  width: 100%;
+  padding: 0.75rem;
+  margin-top: var(--space-4);
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: filter 0.2s;
+}
+
+.submitBtn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.submitBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.error {
+  background-color: rgba(239, 68, 68, 0.1);
   color: var(--color-danger);
-  font-size: var(--text-sm);
-  margin-top: var(--space-2);
-}
-
-.formSuccess {
-  color: var(--color-success);
-  font-size: var(--text-sm);
-  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  font-size: 0.875rem;
   text-align: center;
 }
 
-.authSubmit {
-  margin-top: var(--space-2);
-}
-
-.authSwitch {
-  text-align: center;
+.toggleMode {
   margin-top: var(--space-6);
-  font-size: var(--text-sm);
+  text-align: center;
+  font-size: 0.875rem;
   color: var(--color-text-secondary);
 }
 
-.authSwitch a {
+.toggleBtn {
+  background: none;
+  border: none;
   color: var(--color-primary);
-  font-weight: var(--weight-medium);
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0 var(--space-1);
 }
 
-.loadingSpinner {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  border: 2px solid transparent;
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.toggleBtn:hover {
+  text-decoration: underline;
 }

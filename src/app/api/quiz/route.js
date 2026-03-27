@@ -85,7 +85,7 @@ Svara EXAKT i denna JSON-struktur utan Markdown-kodblock eller varningar:
 }
 `;
 
-    const model = getGeminiModel("gemini-2.5-flash");
+    const model = getGeminiModel("gemini-3-flash-preview");
     
     let result;
     if (sourceMaterial) {

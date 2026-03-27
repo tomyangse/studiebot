@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { SubjectProvider, useSubject } from "@/lib/subject-context";
+import { supabase } from "@/lib/supabase";
 import { SUBJECTS } from "@/lib/curriculum-data";
 import styles from "./dashboard.module.css";
 
@@ -36,6 +37,9 @@ function DashboardLayoutInner({ children }) {
   const [selectedLevel, setSelectedLevel] = useState(null);
   const [addError, setAddError] = useState("");
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [messages, setMessages] = useState([
@@ -50,8 +54,46 @@ function DashboardLayoutInner({ children }) {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
+    let mounted = true;
+    
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+      if (session) {
+        setUser(session.user);
+      } else {
+        router.push("/login");
+      }
+      setAuthLoading(false);
+    };
+
+    checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!mounted) return;
+        if (session) {
+          setUser(session.user);
+        } else {
+          router.push("/login");
+        }
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [router]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  if (authLoading) {
+    return <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)' }}>Laddar StudieMate...</div>;
+  }
+
 
   const handleChatSend = async () => {
     if (!chatInput.trim() || chatLoading) return;
@@ -176,11 +218,16 @@ function DashboardLayoutInner({ children }) {
 
         <div className={styles.sidebarFooter}>
           <div className={styles.sidebarUser}>
-            <div className={styles.sidebarAvatar}>E</div>
+            <div className={styles.sidebarAvatar}>{user?.user_metadata?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "E"}</div>
             <div className={styles.sidebarUserInfo}>
-              <div className={styles.sidebarUserName}>Elev</div>
+              <div className={styles.sidebarUserName}>{user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Elev"}</div>
               <div className={styles.sidebarUserProgram}>
-                Samhällsvetenskap åk 1
+                <button
+                  onClick={() => supabase.auth.signOut()}
+                  style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer', fontSize: '0.8rem', padding: 0 }}
+                >
+                  Logga ut
+                </button>
               </div>
             </div>
           </div>

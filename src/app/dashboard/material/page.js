@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { HISTORIA_1B_CURRICULUM } from "@/lib/curriculum-data";
 import { useSubject } from "@/lib/subject-context";
 import { useMaterial } from "@/lib/material-context";
+import { supabase } from "@/lib/supabase";
 import styles from "./material.module.css";
 
 export default function MaterialPage() {
@@ -43,9 +44,50 @@ export default function MaterialPage() {
 
   const handleAnalyze = async () => {
     if (!file) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      alert("Du måste vara inloggad för att ladda upp material.");
+      router.push("/login");
+      return;
+    }
+    const user = session.user;
+
     setAnalyzing(true);
 
     try {
+      // 1. Ladda upp till Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('study_materials')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw new Error(`Storage upload failed: ${uploadError.message}`);
+      }
+
+      // 2. Skapa dokument-post i databasen
+      const { data: dbDoc, error: dbError } = await supabase
+        .from('documents')
+        .insert({
+          user_id: user.id,
+          file_name: file.name,
+          storage_path: filePath,
+          file_size: file.size,
+          subject_code: activeSubject.code || "HIS",
+          status: 'analyzing'
+        })
+        .select()
+        .single();
+
+      if (dbError) {
+        throw new Error(`DB insert failed: ${dbError.message}`);
+      }
+
+      // 3. Analysera via Gemini
       const formData = new FormData();
       formData.append("file", file);
       formData.append("subjectCode", activeSubject.code || "HIS");
@@ -55,29 +97,43 @@ export default function MaterialPage() {
         body: formData,
       });
 
-      const data = await response.json();
+      const parsedData = await response.json();
 
-      if (data.success) {
-        setAnalysisResult(data.result);
+      if (parsedData.success) {
+        setAnalysisResult(parsedData.result);
         
-        // Convert file to base64 for context storage
+        // 4. Spara analysen i DB
+        await supabase.from('document_analysis').insert({
+          document_id: dbDoc.id,
+          extracted_topics: parsedData.result.coveredTopics || [],
+          curriculum_mapping: parsedData.result.curriculumMapping || [],
+          overall_coverage: parsedData.result.overallCoverage || 0
+        });
+
+        // Ändra status till done
+        await supabase.from('documents').update({ status: 'done' }).eq('id', dbDoc.id);
+        
+        // Konvertera fil till base64 för kontext (snabblösning för MVP cache i minne)
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onload = () => {
-          const base64Data = reader.result.split(",")[1]; // remove data:image/png;base64, prefix
+          const base64Data = reader.result.split(",")[1];
           addMaterial({
+            id: dbDoc.id,
             filename: file.name,
             mimeType: file.type || "application/pdf",
             base64Data,
-            analysisResult: data.result,
+            storagePath: filePath,
+            analysisResult: parsedData.result,
           });
         };
       } else {
-        alert(data.error || "Ett fel uppstod vid analysen.");
+        await supabase.from('documents').update({ status: 'error' }).eq('id', dbDoc.id);
+        alert(parsedData.error || "Ett fel uppstod vid analysen.");
       }
     } catch (err) {
       console.error(err);
-      alert("Kunde inte analysera dokumentet. Kontrollera din Gemini API Key och försök igen.");
+      alert(`Kunde inte ladda upp/analysera: ${err.message}`);
     } finally {
       setAnalyzing(false);
     }

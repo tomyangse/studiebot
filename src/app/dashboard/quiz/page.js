@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSubject } from "@/lib/subject-context";
 import { useMaterial } from "@/lib/material-context";
+import { supabase } from "@/lib/supabase";
 import styles from "./quiz.module.css";
 
 const DIFFICULTY_OPTIONS = [
@@ -70,10 +71,26 @@ export default function QuizPage() {
           return;
         }
         const mat = materials.find(m => m.id === selectedMaterialId);
+        
+        let base64Data = mat.base64Data;
+        if (!base64Data && mat.storagePath) {
+          const { data, error } = await supabase.storage.from("study_materials").download(mat.storagePath);
+          if (error) {
+            alert("Kunde inte hämta filen från molnet.");
+            setPhase("setup");
+            return;
+          }
+          const reader = new FileReader();
+          base64Data = await new Promise((resolve) => {
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.readAsDataURL(data);
+          });
+        }
+
         payload.sourceMaterial = {
           filename: mat.filename,
           mimeType: mat.mimeType,
-          base64Data: mat.base64Data,
+          base64Data,
         };
       }
 

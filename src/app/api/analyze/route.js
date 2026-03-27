@@ -53,7 +53,7 @@ Svara EXAKT i denna JSON-struktur utan Markdown-kodblock eller extratext runt om
 }
 `;
 
-    const model = getGeminiModel("gemini-2.5-flash");
+    const model = getGeminiModel("gemini-3-flash-preview");
 
       const result = await model.generateContent([
         prompt,
