@@ -3,10 +3,14 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { HISTORIA_1B_CURRICULUM } from "@/lib/curriculum-data";
+import { useSubject } from "@/lib/subject-context";
+import { useMaterial } from "@/lib/material-context";
 import styles from "./material.module.css";
 
 export default function MaterialPage() {
   const router = useRouter();
+  const { activeSubject } = useSubject();
+  const { addMaterial } = useMaterial();
   const [file, setFile] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -44,8 +48,7 @@ export default function MaterialPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      // For MVP, we pass the hardcoded subject code HIS (Historia 1b)
-      formData.append("subjectCode", "HIS");
+      formData.append("subjectCode", activeSubject.code || "HIS");
 
       const response = await fetch("/api/analyze", {
         method: "POST",
@@ -56,6 +59,19 @@ export default function MaterialPage() {
 
       if (data.success) {
         setAnalysisResult(data.result);
+        
+        // Convert file to base64 for context storage
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => {
+          const base64Data = reader.result.split(",")[1]; // remove data:image/png;base64, prefix
+          addMaterial({
+            filename: file.name,
+            mimeType: file.type || "application/pdf",
+            base64Data,
+            analysisResult: data.result,
+          });
+        };
       } else {
         alert(data.error || "Ett fel uppstod vid analysen.");
       }

@@ -7,11 +7,11 @@ export const maxDuration = 60;
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { topics, questionCount = 5, difficulty = "mixed" } = body;
+    const { topics, sourceMaterial, questionCount = 5, difficulty = "mixed" } = body;
 
-    if (!topics || topics.length === 0) {
+    if ((!topics || topics.length === 0) && !sourceMaterial) {
       return NextResponse.json(
-        { error: "Inga ämnen angivna för quiz-generering" },
+        { error: "Ingen källa angiven för quiz-generering" },
         { status: 400 }
       );
     }
@@ -33,13 +33,28 @@ export async function POST(req) {
         ? "Skapa frågor på A-nivå: kritiskt tänkande, nyanserade resonemang, värdering ur flera perspektiv."
         : "Skapa en blandning av frågor: 2 på E-nivå, 2 på C-nivå, 1 på A-nivå.";
 
-    const prompt = `
-Du är en svensk gymnasielärare i Historia 1b. Generera ett quiz baserat på följande information.
+    let prompt = "";
+    if (sourceMaterial) {
+      prompt = `
+Du är en stenhård expertpedagog. Din uppgift är att skapa ett quiz EXAKT och ENBART baserat på det bifogade materialet.
+
+INSTRUKTIONER:
+- Du MÅSTE skapa exakt ${questionCount} flervalsfrågor (4 svarsalternativ vardera) hämtade direkt från den bifogade filen.
+- Använd inte extern kunskap som inte nämns i filen. Om dokumentet är kort, gör frågor om detaljer i texten.
+- ${difficultyInstruction}
+- Alla frågor och svar ska vara på svenska.
+- Inkludera en kort förklaring till varje rätt svar som förklarar varför det är rätt enligt dokumentet.
+- Ange vilken betygsnivå (E, C eller A) varje fråga testar.
+- Svara EXAKT i nedanstående JSON-struktur.
+`;
+    } else {
+      prompt = `
+Du är en svensk gymnasielärare. Generera ett quiz baserat på följande information.
 
 ÄMNESPLAN (Centralt Innehåll):
 ${curriculumContext}
 
-ELEVENS STUDIEÄMNEN:
+ELEVEN HAR VALT FÖLJANDE STUDIEÄMNEN TILL DETTA QUIZ:
 ${topics.join(", ")}
 
 INSTRUKTIONER:
@@ -49,8 +64,11 @@ INSTRUKTIONER:
 - Alla frågor och svar ska vara på svenska.
 - Inkludera en kort förklaring till varje rätt svar som hjälper eleven att förstå principen.
 - Ange vilken betygsnivå (E, C eller A) varje fråga testar.
+`;
+    }
 
-Svara EXAKT i denna JSON-struktur utan Markdown-kodblock:
+    prompt += `
+Svara EXAKT i denna JSON-struktur utan Markdown-kodblock eller varningar:
 {
   "quizTitle": "Quiz-titel",
   "questions": [
@@ -68,7 +86,21 @@ Svara EXAKT i denna JSON-struktur utan Markdown-kodblock:
 `;
 
     const model = getGeminiModel("gemini-2.5-flash");
-    const result = await model.generateContent(prompt);
+    
+    let result;
+    if (sourceMaterial) {
+      result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: sourceMaterial.base64Data,
+            mimeType: sourceMaterial.mimeType || "application/pdf"
+          }
+        }
+      ]);
+    } else {
+      result = await model.generateContent(prompt);
+    }
     let textResponse = result.response.text();
     textResponse = textResponse
       .replace(/```json/g, "")

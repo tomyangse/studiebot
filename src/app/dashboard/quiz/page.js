@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSubject } from "@/lib/subject-context";
+import { useMaterial } from "@/lib/material-context";
 import styles from "./quiz.module.css";
 
 const DIFFICULTY_OPTIONS = [
@@ -13,12 +14,15 @@ const DIFFICULTY_OPTIONS = [
 
 export default function QuizPage() {
   const { curriculum } = useSubject();
+  const { materials } = useMaterial();
   const availableTopics = curriculum.centralContent.map((cc) => ({
     id: cc.id,
     label: cc.title,
   }));
   const [phase, setPhase] = useState("setup");
+  const [sourceType, setSourceType] = useState("curriculum"); // 'curriculum' | 'material'
   const [selectedTopics, setSelectedTopics] = useState([]);
+  const [selectedMaterialId, setSelectedMaterialId] = useState(null);
   const [difficulty, setDifficulty] = useState("mixed");
   const [quiz, setQuiz] = useState(null);
   const [currentQ, setCurrentQ] = useState(0);
@@ -43,18 +47,40 @@ export default function QuizPage() {
   const handleGenerate = async () => {
     setPhase("loading");
     try {
-      const topicLabels = availableTopics
-        .filter((t) => selectedTopics.includes(t.id))
-        .map((t) => t.label);
+      let payload = {
+        questionCount: 5,
+        difficulty,
+      };
+
+      if (sourceType === "curriculum") {
+        const topicLabels = availableTopics
+          .filter((t) => selectedTopics.includes(t.id))
+          .map((t) => t.label);
+        
+        if (topicLabels.length === 0) {
+          alert("Välj minst ett ämne från kursplanen.");
+          setPhase("setup");
+          return;
+        }
+        payload.topics = topicLabels;
+      } else {
+        if (!selectedMaterialId) {
+          alert("Välj ett material.");
+          setPhase("setup");
+          return;
+        }
+        const mat = materials.find(m => m.id === selectedMaterialId);
+        payload.sourceMaterial = {
+          filename: mat.filename,
+          mimeType: mat.mimeType,
+          base64Data: mat.base64Data,
+        };
+      }
 
       const res = await fetch("/api/quiz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topics: topicLabels,
-          questionCount: 5,
-          difficulty,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -133,33 +159,74 @@ export default function QuizPage() {
       {phase === "setup" && (
         <div className={styles.quizSetup}>
           <p style={{ color: "var(--color-text-secondary)", marginBottom: "var(--space-6)" }}>
-            Välj ämnen och svårighetsgrad för att generera ett quiz med AI.
+            Välj källa och svårighetsgrad för att generera ett quiz med AI.
           </p>
 
-          <h3 style={{ marginBottom: "var(--space-3)" }}>Välj ämnen</h3>
-          <div className={styles.topicChips}>
+          <h3 style={{ marginBottom: "var(--space-3)" }}>Datakälla</h3>
+          <div className={styles.sourceSelector} style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
             <button
-              className={`${styles.topicChip} ${
-                selectedTopics.length === availableTopics.length ? styles.selected : ""
-              }`}
-              onClick={selectAll}
+              className={`btn ${sourceType === "curriculum" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setSourceType("curriculum")}
             >
-              Alla
+              📖 Kursplanen
             </button>
-            {availableTopics.map((topic) => (
-              <button
-                key={topic.id}
-                className={`${styles.topicChip} ${
-                  selectedTopics.includes(topic.id) ? styles.selected : ""
-                }`}
-                onClick={() => toggleTopic(topic.id)}
-              >
-                {topic.label}
-              </button>
-            ))}
+            <button
+              className={`btn ${sourceType === "material" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setSourceType("material")}
+            >
+              📄 Mitt material
+            </button>
           </div>
 
-          <h3 style={{ marginBottom: "var(--space-3)" }}>Svårighetsgrad</h3>
+          <h3 style={{ marginBottom: "var(--space-3)" }}>
+            {sourceType === "curriculum" ? "Välj Ämnen" : "Välj Dokument"}
+          </h3>
+          
+          {sourceType === "curriculum" && (
+            <div className={styles.topicChips}>
+              <button
+                className={`${styles.topicChip} ${
+                  selectedTopics.length === availableTopics.length ? styles.selected : ""
+                }`}
+                onClick={selectAll}
+              >
+                Alla
+              </button>
+              {availableTopics.map((topic) => (
+                <button
+                  key={topic.id}
+                  className={`${styles.topicChip} ${
+                    selectedTopics.includes(topic.id) ? styles.selected : ""
+                  }`}
+                  onClick={() => toggleTopic(topic.id)}
+                >
+                  {topic.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {sourceType === "material" && (
+            <div className={styles.topicChips}>
+              {materials && materials.length > 0 ? (
+                materials.map((mat) => (
+                  <button
+                    key={mat.id}
+                    className={`${styles.topicChip} ${
+                      selectedMaterialId === mat.id ? styles.selected : ""
+                    }`}
+                    onClick={() => setSelectedMaterialId(mat.id)}
+                  >
+                    📄 {mat.filename}
+                  </button>
+                ))
+              ) : (
+                <p style={{ color: "var(--color-text-muted)" }}>Inga uppladdade dokument. Gå till Material för att ladda upp.</p>
+              )}
+            </div>
+          )}
+
+          <h3 style={{ marginBottom: "var(--space-3)", marginTop: "var(--space-6)" }}>Svårighetsgrad</h3>
           <div className={styles.difficultyGrid}>
             {DIFFICULTY_OPTIONS.map((opt) => (
               <div
@@ -178,10 +245,10 @@ export default function QuizPage() {
 
           <button
             className="btn btn-primary btn-lg"
-            disabled={selectedTopics.length === 0}
+            disabled={sourceType === "curriculum" ? selectedTopics.length === 0 : !selectedMaterialId}
             onClick={handleGenerate}
           >
-            {"🧠"} Generera quiz ({selectedTopics.length} ämne{selectedTopics.length !== 1 ? "n" : ""})
+            {"🧠"} Generera quiz {sourceType === "curriculum" ? `(${selectedTopics.length} ämne${selectedTopics.length !== 1 ? "n" : ""})` : "(1 dokument)"}
           </button>
         </div>
       )}

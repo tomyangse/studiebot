@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSubject } from "@/lib/subject-context";
+import { useMaterial } from "@/lib/material-context";
 import styles from "./flashcards.module.css";
 
 const TYPE_LABELS = {
@@ -14,12 +15,15 @@ const TYPE_LABELS = {
 
 export default function FlashcardsPage() {
   const { curriculum } = useSubject();
+  const { materials } = useMaterial();
   const AVAILABLE_TOPICS = curriculum.centralContent.map((cc) => ({
     id: cc.id,
     label: cc.title,
   }));
   const [phase, setPhase] = useState("setup"); // setup | loading | study | results
+  const [sourceType, setSourceType] = useState("curriculum"); // 'curriculum' | 'material'
   const [selectedTopics, setSelectedTopics] = useState([]);
+  const [selectedMaterialId, setSelectedMaterialId] = useState(null);
   const [cardCount, setCardCount] = useState(10);
   const [deck, setDeck] = useState(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -43,14 +47,39 @@ export default function FlashcardsPage() {
   const handleGenerate = async () => {
     setPhase("loading");
     try {
-      const topicLabels = AVAILABLE_TOPICS.filter((t) =>
-        selectedTopics.includes(t.id)
-      ).map((t) => t.label);
+      let payload = {
+        cardCount
+      };
+
+      if (sourceType === "curriculum") {
+        const topicLabels = AVAILABLE_TOPICS.filter((t) =>
+          selectedTopics.includes(t.id)
+        ).map((t) => t.label);
+        
+        if (topicLabels.length === 0) {
+          alert("Välj minst ett ämne från kursplanen.");
+          setPhase("setup");
+          return;
+        }
+        payload.topics = topicLabels;
+      } else {
+        if (!selectedMaterialId) {
+          alert("Välj ett material.");
+          setPhase("setup");
+          return;
+        }
+        const mat = materials.find(m => m.id === selectedMaterialId);
+        payload.sourceMaterial = {
+          filename: mat.filename,
+          mimeType: mat.mimeType,
+          base64Data: mat.base64Data,
+        };
+      }
 
       const res = await fetch("/api/flashcards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topics: topicLabels, cardCount }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -131,35 +160,76 @@ export default function FlashcardsPage() {
       {phase === "setup" && (
         <div className={styles.fcSetup}>
           <p style={{ color: "var(--color-text-secondary)", marginBottom: "var(--space-6)" }}>
-            Generera minneslappar baserade på ämnesplanens centrala innehåll.
+            Välj källa för att generera flashcards med AI.
           </p>
 
-          <h3 style={{ marginBottom: "var(--space-3)" }}>Välj ämnen</h3>
-          <div className={styles.fcTopicChips}>
+          <h3 style={{ marginBottom: "var(--space-3)" }}>Datakälla</h3>
+          <div className={styles.sourceSelector} style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
             <button
-              className={`${styles.fcTopicChip} ${
-                selectedTopics.length === AVAILABLE_TOPICS.length
-                  ? styles.selected
-                  : ""
-              }`}
-              onClick={selectAll}
+              className={`btn ${sourceType === "curriculum" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setSourceType("curriculum")}
             >
-              Alla
+              📖 Kursplanen
             </button>
-            {AVAILABLE_TOPICS.map((topic) => (
-              <button
-                key={topic.id}
-                className={`${styles.fcTopicChip} ${
-                  selectedTopics.includes(topic.id) ? styles.selected : ""
-                }`}
-                onClick={() => toggleTopic(topic.id)}
-              >
-                {topic.label}
-              </button>
-            ))}
+            <button
+              className={`btn ${sourceType === "material" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setSourceType("material")}
+            >
+              📄 Mitt material
+            </button>
           </div>
 
-          <div className={styles.fcCountRow}>
+          <h3 style={{ marginBottom: "var(--space-3)" }}>
+            {sourceType === "curriculum" ? "Välj Ämnen" : "Välj Dokument"}
+          </h3>
+          
+          {sourceType === "curriculum" && (
+            <div className={styles.fcTopicChips}>
+              <button
+                className={`${styles.fcTopicChip} ${
+                  selectedTopics.length === AVAILABLE_TOPICS.length
+                    ? styles.selected
+                    : ""
+                }`}
+                onClick={selectAll}
+              >
+                Alla
+              </button>
+              {AVAILABLE_TOPICS.map((topic) => (
+                <button
+                  key={topic.id}
+                  className={`${styles.fcTopicChip} ${
+                    selectedTopics.includes(topic.id) ? styles.selected : ""
+                  }`}
+                  onClick={() => toggleTopic(topic.id)}
+                >
+                  {topic.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {sourceType === "material" && (
+            <div className={styles.fcTopicChips}>
+              {materials && materials.length > 0 ? (
+                materials.map((mat) => (
+                  <button
+                    key={mat.id}
+                    className={`${styles.fcTopicChip} ${
+                      selectedMaterialId === mat.id ? styles.selected : ""
+                    }`}
+                    onClick={() => setSelectedMaterialId(mat.id)}
+                  >
+                    📄 {mat.filename}
+                  </button>
+                ))
+              ) : (
+                <p style={{ color: "var(--color-text-muted)" }}>Inga uppladdade dokument. Gå till Material för att ladda upp.</p>
+              )}
+            </div>
+          )}
+
+          <div className={styles.fcCountRow} style={{ marginTop: "var(--space-6)" }}>
             <span className={styles.fcCountLabel}>Antal kort:</span>
             <select
               className={styles.fcCountSelect}
@@ -175,10 +245,10 @@ export default function FlashcardsPage() {
 
           <button
             className="btn btn-primary btn-lg"
-            disabled={selectedTopics.length === 0}
+            disabled={sourceType === "curriculum" ? selectedTopics.length === 0 : !selectedMaterialId}
             onClick={handleGenerate}
           >
-            🧠 Generera {cardCount} flashcards
+            🧠 Generera {cardCount} flashcards {sourceType === "curriculum" ? `(${selectedTopics.length} ämne${selectedTopics.length !== 1 ? "n" : ""})` : "(1 dokument)"}
           </button>
         </div>
       )}

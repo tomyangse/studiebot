@@ -7,11 +7,11 @@ export const maxDuration = 60;
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { topics, cardCount = 10 } = body;
+    const { topics, sourceMaterial, cardCount = 10 } = body;
 
-    if (!topics || topics.length === 0) {
+    if ((!topics || topics.length === 0) && !sourceMaterial) {
       return NextResponse.json(
-        { error: "Inga ämnen angivna" },
+        { error: "Ingen källa angiven" },
         { status: 400 }
       );
     }
@@ -23,8 +23,24 @@ export async function POST(req) {
       )
       .join("\n\n");
 
-    const prompt = `
-Du är en svensk gymnasielärare i Historia 1b. Skapa flashcards (minneslappar) för studenter.
+    let prompt = "";
+    if (sourceMaterial) {
+      prompt = `
+Du är en stenhård expertpedagog. Din uppgift är att skapa flashcards (minneslappar) EXAKT och ENBART baserat på det bifogade materialet.
+
+INSTRUKTIONER:
+- Generera exakt ${cardCount} flashcards hämtade direkt från den bifogade filen.
+- Använd inte extern kunskap som inte nämns i filen. Om dokumentet är kort, gör kort om detaljer i texten.
+- Varje kort har en framsida (fråga/begrepp) och en baksida (svar/förklaring).
+- Blanda olika typer av kort: definition, event, cause, connection, concept.
+- Framsidan ska vara kort och tydlig (max 1-2 meningar).
+- Baksidan ska vara koncis men informativ (max 3-4 meningar).
+- Alla kort på svenska.
+- Variera svårighetsnivå (E/C/A).
+`;
+    } else {
+      prompt = `
+Du är en svensk gymnasielärare. Skapa flashcards (minneslappar) för studenter.
 
 ÄMNESPLAN (Centralt Innehåll):
 ${curriculumContext}
@@ -35,19 +51,16 @@ ${topics.join(", ")}
 INSTRUKTIONER:
 - Generera exakt ${cardCount} flashcards.
 - Varje kort har en framsida (fråga/begrepp) och en baksida (svar/förklaring).
-- Blanda olika typer av kort:
-  * Definitioner: "Vad är...?" → kort svar
-  * Årtal/händelser: "När...?" → datum + kontext  
-  * Orsaker: "Varför...?" → 2-3 punkter
-  * Samband: "Hur hänger X ihop med Y?" → förklaring
-  * Begrepp: "Förklara begreppet..." → definition + exempel
+- Blanda olika typer av kort: definition, event, cause, connection, concept.
 - Framsidan ska vara kort och tydlig (max 1-2 meningar).
 - Baksidan ska vara koncis men informativ (max 3-4 meningar).
 - Alla kort på svenska.
 - Variera svårighetsnivå (E/C/A).
-- Koppla varje kort till rätt centralt innehåll (cc1-cc5).
+`;
+    }
 
-Svara EXAKT i denna JSON-struktur utan Markdown-kodblock:
+    prompt += `
+Svara EXAKT i denna JSON-struktur utan Markdown-kodblock eller varningar:
 {
   "deckTitle": "Titel på kortleken",
   "cards": [
@@ -64,7 +77,22 @@ Svara EXAKT i denna JSON-struktur utan Markdown-kodblock:
 `;
 
     const model = getGeminiModel("gemini-2.5-flash");
-    const result = await model.generateContent(prompt);
+    
+    let result;
+    if (sourceMaterial) {
+      result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: sourceMaterial.base64Data,
+            mimeType: sourceMaterial.mimeType || "application/pdf"
+          }
+        }
+      ]);
+    } else {
+      result = await model.generateContent(prompt);
+    }
+    
     let text = result.response.text();
     text = text.replace(/```json/g, "").replace(/```/g, "").trim();
 

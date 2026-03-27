@@ -15,10 +15,14 @@ const NAV_ITEMS = [
   { href: "/dashboard/flashcards", icon: "🃏", label: "Flashcards" },
 ];
 
+import { MaterialProvider } from "@/lib/material-context";
+
 export default function DashboardLayout({ children }) {
   return (
     <SubjectProvider>
-      <DashboardLayoutInner>{children}</DashboardLayoutInner>
+      <MaterialProvider>
+        <DashboardLayoutInner>{children}</DashboardLayoutInner>
+      </MaterialProvider>
     </SubjectProvider>
   );
 }
