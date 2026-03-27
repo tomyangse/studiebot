@@ -102,11 +102,15 @@ export default function KunskapskartaPage() {
     }
 
     setDeletingDocId(doc.id);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
 
     try {
-      // 1. Delete from storage
+      // 1. Delete flashcard decks (cascades to flashcards -> reviews)
+      await supabase.from('flashcard_decks').delete().eq('document_id', doc.id);
+
+      // 2. Delete analysis
+      await supabase.from('document_analysis').delete().eq('document_id', doc.id);
+
+      // 3. Delete from storage
       const { data: docData } = await supabase
         .from('documents')
         .select('storage_path')
@@ -117,12 +121,15 @@ export default function KunskapskartaPage() {
         await supabase.storage.from('study_materials').remove([docData.storage_path]);
       }
 
-      // 2. Delete from DB (cascades to document_analysis, flashcard_decks -> flashcards -> flashcard_reviews)
-      await supabase.from('documents').delete().eq('id', doc.id);
+      // 4. Delete document record
+      const { error } = await supabase.from('documents').delete().eq('id', doc.id);
+      if (error) {
+        alert(`Kunde inte ta bort: ${error.message}`);
+        return;
+      }
 
-      // Refresh lists
       setDocuments(prev => prev.filter(d => d.id !== doc.id));
-      loadRealProgress(); // Refresh mastery stats
+      loadRealProgress();
     } catch (err) {
       console.error('Delete error:', err);
       alert('Kunde inte ta bort dokumentet.');

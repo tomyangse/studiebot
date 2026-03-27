@@ -56,13 +56,43 @@ export default function MaterialPage() {
     if (!confirm(`Ta bort "${doc.file_name}"? Alla flashcards och quiz-data raderas.`)) return;
     setDeletingDocId(doc.id);
     try {
+      // 1. Delete associated flashcard decks (cascades to flashcards -> flashcard_reviews)
+      const { error: deckError } = await supabase
+        .from('flashcard_decks')
+        .delete()
+        .eq('document_id', doc.id);
+      if (deckError) console.warn('Deck delete warning:', deckError.message);
+
+      // 2. Delete analysis records
+      const { error: analysisError } = await supabase
+        .from('document_analysis')
+        .delete()
+        .eq('document_id', doc.id);
+      if (analysisError) console.warn('Analysis delete warning:', analysisError.message);
+
+      // 3. Delete from storage
       if (doc.storage_path) {
-        await supabase.storage.from('study_materials').remove([doc.storage_path]);
+        const { error: storageError } = await supabase.storage
+          .from('study_materials')
+          .remove([doc.storage_path]);
+        if (storageError) console.warn('Storage delete warning:', storageError.message);
       }
-      await supabase.from('documents').delete().eq('id', doc.id);
+
+      // 4. Delete the document record itself
+      const { error: docError } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', doc.id);
+
+      if (docError) {
+        console.error('Document delete error:', docError);
+        alert(`Kunde inte ta bort: ${docError.message}`);
+        return;
+      }
+
       setExistingDocs(prev => prev.filter(d => d.id !== doc.id));
     } catch (err) {
-      console.error(err);
+      console.error('Delete error:', err);
       alert('Kunde inte ta bort dokumentet.');
     } finally {
       setDeletingDocId(null);
