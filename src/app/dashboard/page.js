@@ -1,21 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSubject } from "@/lib/subject-context";
 import styles from "./overview.module.css";
 
-const MOCK_SUBJECTS = [
-  { icon: "📜", name: "Historia 1b", progress: 35, points: "100p", status: "active" },
-];
-
-const MOCK_TASKS = [
-  { id: 1, text: "Repetition: Industriella revolutionen (8 kort)", type: "flashcard", done: false },
-  { id: 2, text: "Quiz: Världskrigen — orsaker & konsekvenser", type: "quiz", done: false },
-  { id: 3, text: "Läs igenom: Demokratisering i Sverige", type: "read", done: false },
-];
-
 export default function DashboardOverview() {
-  const [tasks, setTasks] = useState(MOCK_TASKS);
+  const { activeSubject, curriculum } = useSubject();
+  const [tasks, setTasks] = useState([]);
+
+  useEffect(() => {
+    if (curriculum && curriculum.centralContent && curriculum.centralContent.length >= 3) {
+      const cc = curriculum.centralContent;
+      setTasks([
+        { id: 1, text: `Repetition: ${cc[0]?.title} (8 kort)`, type: "flashcard", done: false },
+        { id: 2, text: `Quiz: ${cc[1]?.title}`, type: "quiz", done: false },
+        { id: 3, text: `Läs igenom: ${cc[2]?.title}`, type: "read", done: false },
+      ]);
+    } else {
+      setTasks([
+        { id: 1, text: "Repetition (8 kort)", type: "flashcard", done: false },
+        { id: 2, text: "Gör ett quiz", type: "quiz", done: false },
+        { id: 3, text: "Läs igenom materialet", type: "read", done: false },
+      ]);
+    }
+  }, [curriculum]);
 
   const toggleTask = (id) => {
     setTasks((prev) =>
@@ -24,6 +33,14 @@ export default function DashboardOverview() {
   };
 
   const completedTasks = tasks.filter((t) => t.done).length;
+
+  const displaySubject = {
+    name: activeSubject.levelName,
+    icon: activeSubject.icon,
+    progress: 35, // Mock progress
+    points: `${activeSubject.points}p`,
+    status: "active"
+  };
 
   return (
     <div className={styles.overview}>
@@ -79,45 +96,34 @@ export default function DashboardOverview() {
         <div className={styles.subjectProgressSection}>
           <h2>Dina ämnen</h2>
           <div className={styles.subjectProgressList}>
-            {MOCK_SUBJECTS.map((subject) => (
               <div
-                key={subject.name}
                 className={`card ${styles.subjectProgressItem}`}
               >
                 <span className={styles.subjectProgressIcon}>
-                  {subject.icon}
+                  {displaySubject.icon}
                 </span>
                 <div className={styles.subjectProgressInfo}>
                   <div className={styles.subjectProgressName}>
-                    {subject.name}
+                    {displaySubject.name}
                   </div>
                   <div className={styles.subjectProgressMeta}>
-                    <span>{subject.points}</span>
+                    <span>{displaySubject.points}</span>
                     <span>•</span>
                     <span>
-                      {subject.progress}% av ämnesplanen täckt
+                      {displaySubject.progress}% av ämnesplanen täckt
                     </span>
                   </div>
                 </div>
                 <div className={`progress-bar ${styles.subjectProgressBar}`}>
                   <div
                     className="progress-bar-fill"
-                    style={{ width: `${subject.progress}%` }}
+                    style={{ width: `${displaySubject.progress}%` }}
                   />
                 </div>
                 <span className={styles.subjectProgressPercent}>
-                  {subject.progress}%
+                  {displaySubject.progress}%
                 </span>
               </div>
-            ))}
-
-            <Link
-              href="/onboarding"
-              className="btn btn-secondary btn-sm"
-              style={{ alignSelf: "flex-start", marginTop: "var(--space-2)" }}
-            >
-              + Lägg till ämne
-            </Link>
           </div>
         </div>
 
