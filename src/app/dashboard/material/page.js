@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { HISTORIA_1B_CURRICULUM } from "@/lib/curriculum-data";
 import { useSubject } from "@/lib/subject-context";
@@ -19,6 +19,55 @@ export default function MaterialPage() {
   const [lastDocId, setLastDocId] = useState(null);
   const [extracting, setExtracting] = useState(false);
   const [extractResult, setExtractResult] = useState(null);
+  const [existingDocs, setExistingDocs] = useState([]);
+  const [deletingDocId, setDeletingDocId] = useState(null);
+
+  useEffect(() => {
+    loadExistingDocs();
+  }, []);
+
+  const loadExistingDocs = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const { data: docs } = await supabase
+      .from('documents')
+      .select('id, file_name, file_size, status, created_at, storage_path')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false });
+
+    if (!docs) return;
+
+    const docIds = docs.map(d => d.id);
+    const { data: decks } = await supabase
+      .from('flashcard_decks')
+      .select('document_id, total_cards, status')
+      .in('document_id', docIds);
+
+    const enriched = docs.map(doc => ({
+      ...doc,
+      deck: decks?.find(d => d.document_id === doc.id),
+    }));
+
+    setExistingDocs(enriched);
+  };
+
+  const handleDeleteDoc = async (doc) => {
+    if (!confirm(`Ta bort "${doc.file_name}"? Alla flashcards och quiz-data raderas.`)) return;
+    setDeletingDocId(doc.id);
+    try {
+      if (doc.storage_path) {
+        await supabase.storage.from('study_materials').remove([doc.storage_path]);
+      }
+      await supabase.from('documents').delete().eq('id', doc.id);
+      setExistingDocs(prev => prev.filter(d => d.id !== doc.id));
+    } catch (err) {
+      console.error(err);
+      alert('Kunde inte ta bort dokumentet.');
+    } finally {
+      setDeletingDocId(null);
+    }
+  };
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
@@ -435,6 +484,61 @@ export default function MaterialPage() {
             >
               📄 Ladda upp nytt material
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* === Existing Documents === */}
+      {!file && !analysisResult && existingDocs.length > 0 && (
+        <div style={{ marginTop: 'var(--space-8)' }}>
+          <h2 style={{ marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            📁 Uppladdade dokument
+            <span className="badge badge-info" style={{ fontSize: 'var(--text-xs)' }}>{existingDocs.length}</span>
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            {existingDocs.map((doc) => {
+              const sizeStr = doc.file_size
+                ? doc.file_size < 1024 * 1024
+                  ? `${(doc.file_size / 1024).toFixed(1)} KB`
+                  : `${(doc.file_size / (1024 * 1024)).toFixed(1)} MB`
+                : '';
+              const dateStr = new Date(doc.created_at).toLocaleDateString('sv-SE');
+              const hasDeck = doc.deck && doc.deck.status === 'ready';
+              const cardCount = doc.deck?.total_cards || 0;
+
+              return (
+                <div key={doc.id} className="card" style={{ padding: 'var(--space-4)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
+                        <span style={{ fontSize: '1.2rem' }}>
+                          {doc.file_name.endsWith('.pdf') ? '📕' : doc.file_name.match(/\.(png|jpg|jpeg)$/i) ? '🖼️' : '📄'}
+                        </span>
+                        <strong style={{ fontSize: 'var(--text-sm)' }}>{doc.file_name}</strong>
+                        <span className={`badge ${doc.status === 'done' ? 'badge-success' : doc.status === 'error' ? 'badge-danger' : 'badge-warning'}`}
+                              style={{ fontSize: 'var(--text-xs)' }}>
+                          {doc.status === 'done' ? '✓ Klar' : doc.status === 'error' ? 'Fel' : 'Bearbetar...'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 'var(--space-4)', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                        {sizeStr && <span>📦 {sizeStr}</span>}
+                        <span>📅 {dateStr}</span>
+                        {hasDeck && <span style={{ color: 'var(--color-success)' }}>🃏 {cardCount} flashcards</span>}
+                        {!hasDeck && doc.status === 'done' && <span style={{ color: 'var(--color-warning)' }}>⚠️ Ej extraherad</span>}
+                      </div>
+                    </div>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--color-danger)', flexShrink: 0 }}
+                      disabled={deletingDocId === doc.id}
+                      onClick={() => handleDeleteDoc(doc)}
+                    >
+                      {deletingDocId === doc.id ? '⏳' : '🗑️ Ta bort'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
