@@ -184,8 +184,120 @@ export const SUBJECTS = [
       { level: 1, name: "Naturkunskap 1a1", points: 50 },
       { level: 2, name: "Naturkunskap 1a2", points: 50 },
       { level: 3, name: "Naturkunskap 1b", points: 100 },
+      { level: 4, name: "Naturkunskap 2", points: 100 },
     ],
     icon: "🌍",
+  },
+  {
+    code: "FYS",
+    name: "Fysik",
+    levels: [
+      { level: 1, name: "Fysik 1", points: 150 },
+      { level: 2, name: "Fysik 2", points: 100 },
+      { level: 3, name: "Fysik 3", points: 100 },
+    ],
+    icon: "⚛️",
+  },
+  {
+    code: "KEM",
+    name: "Kemi",
+    levels: [
+      { level: 1, name: "Kemi 1", points: 100 },
+      { level: 2, name: "Kemi 2", points: 100 },
+    ],
+    icon: "🧪",
+  },
+  {
+    code: "BIO",
+    name: "Biologi",
+    levels: [
+      { level: 1, name: "Biologi 1", points: 100 },
+      { level: 2, name: "Biologi 2", points: 100 },
+    ],
+    icon: "🧬",
+  },
+  {
+    code: "GEO",
+    name: "Geografi",
+    levels: [
+      { level: 1, name: "Geografi 1", points: 100 },
+      { level: 2, name: "Geografi 2", points: 100 },
+    ],
+    icon: "🗺️",
+  },
+  {
+    code: "REL",
+    name: "Religionskunskap",
+    levels: [
+      { level: 1, name: "Religionskunskap 1", points: 50 },
+      { level: 2, name: "Religionskunskap 2", points: 50 },
+    ],
+    icon: "🕊️",
+  },
+  {
+    code: "FIL",
+    name: "Filosofi",
+    levels: [
+      { level: 1, name: "Filosofi 1", points: 50 },
+      { level: 2, name: "Filosofi 2", points: 50 },
+    ],
+    icon: "💭",
+  },
+  {
+    code: "PSY",
+    name: "Psykologi",
+    levels: [
+      { level: 1, name: "Psykologi 1", points: 50 },
+      { level: 2, name: "Psykologi 2a", points: 50 },
+      { level: 3, name: "Psykologi 2b", points: 50 },
+    ],
+    icon: "🧠",
+  },
+  {
+    code: "FÖG",
+    name: "Företagsekonomi",
+    levels: [
+      { level: 1, name: "Företagsekonomi 1", points: 100 },
+      { level: 2, name: "Företagsekonomi 2", points: 100 },
+    ],
+    icon: "📊",
+  },
+  {
+    code: "JUR",
+    name: "Juridik",
+    levels: [
+      { level: 1, name: "Privatjuridik", points: 100 },
+      { level: 2, name: "Affärsjuridik", points: 100 },
+      { level: 3, name: "Rätten och samhället", points: 100 },
+    ],
+    icon: "⚖️",
+  },
+  {
+    code: "IDR",
+    name: "Idrott och hälsa",
+    levels: [
+      { level: 1, name: "Idrott och hälsa 1", points: 100 },
+      { level: 2, name: "Idrott och hälsa 2", points: 100 },
+    ],
+    icon: "🏃",
+  },
+  {
+    code: "PRG",
+    name: "Programmering",
+    levels: [
+      { level: 1, name: "Programmering 1", points: 100 },
+      { level: 2, name: "Programmering 2", points: 100 },
+    ],
+    icon: "💻",
+  },
+  {
+    code: "TEK",
+    name: "Teknik",
+    levels: [
+      { level: 1, name: "Teknik 1", points: 150 },
+      { level: 2, name: "Teknik 2", points: 100 },
+    ],
+    icon: "⚙️",
   },
 ];
 
